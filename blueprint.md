@@ -43,7 +43,7 @@ The system operates as three decoupled local services:
 
 ### 1.2 Agent Runners
 *   Independent processes (Node.js/TypeScript or Python) that connect to the Local Express Server.
-*   They use **LiteLLM** or **Ollama APIs** for inference.
+*   They use **cloud APIs** (via LiteLLM / Gemini SDK / Anthropic SDK) for heavy reasoning to save local RAM, running local commands only as needed.
 *   They call **MCP Servers** directly using the JSON-RPC standard to interact with files, run terminal commands, or check database schemas.
 
 ---
@@ -117,16 +117,18 @@ gantt
     *   Build a custom chronological waterfall component (Sequence Timeline) that renders WebSocket events.
     *   Implement the Drawer Inspector to inspect prompts/response parameters for selected events.
 
-### Phase 4: Local Ollama & LLM Routing
-*   **Goal:** Connect the Main Agent and background workers.
+### Phase 4: LLM API Routing & Agent Workers
+*   **Goal:** Connect the Main Agent and background workers using cloud LLM APIs to conserve local memory.
 *   **Tasks:**
-    *   Integrate local Ollama client configuration.
+    *   Integrate LiteLLM / Gemini API routing keys securely.
     *   Set up the Orchestrator loop: Main Agent parses prompts, breaks down tasks, and publishes them.
-    *   Connect the Coder Agent and Searcher Agent to read/write files via local MCP server integration.
+    *   Connect the Coder Agent and Searcher Agent to read/write files via local/cloud MCP server integration.
+    *   Configure local fallback paths if cloud APIs encounter rate-limits.
 
-### Phase 5: CRM, Support Mail, & Operations
-*   **Goal:** Connect the platform to live production apps.
+### Phase 5: CRM, Support Mail, & Production Operations
+*   **Goal:** Connect the platform to live production apps and set up legal/compliance structures.
 *   **Tasks:**
-    *   Implement DB connectors in the `Users` tab to inspect live SQLite/PostgreSQL schemas.
-    *   Build an inbound email receiver to convert mail to tickets in the `Support` tab.
+    *   Implement DB connectors in the `Users` tab to inspect live cloud databases (Supabase, Firebase, or Postgres).
+    *   Build an inbound email receiver (SendGrid Inbound Parse or similar) to convert support mail to tickets in the `Support` tab.
     *   Equip the Support Agent with DB and log lookup prompts to auto-draft ticket replies.
+    *   Build the compliance component: Cookie Banner component, Terms of Service renderer, and GDPR data download/deletion tools.

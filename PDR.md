@@ -8,13 +8,13 @@
 ---
 
 ## 1. Executive Summary & Goals
-The goal of the **Bobbie Digital Hub** is to build a local-first, low-overhead application development and management portal. The system is tailored to allow a single developer or small agency to develop and maintain client applications with minimal manual labor, zero hosting/licensing fees for administrative suites, and agentic automation for support, health, and code generation.
+The goal of the **Bobbie Digital Hub** is to build a cloud-first hybrid, low-overhead application development and management portal. The system is tailored to allow a single developer or small agency to develop and maintain client applications with minimal local resource footprint, zero hosting/licensing fees for administrative suites, and agentic automation for support, health, and code generation.
 
 ### Key Objectives
 *   **Decoupled Multi-Agent Systems:** A system where specialized agents run in the background and report state changes to a central event bus.
 *   **Single Communication Channel:** The developer interacts exclusively with a single "Main Agent" who is responsible for directing workflows and presenting consolidated updates.
 *   **Integrated CRM and Support:** Support tickets and user data for live client sites are directly accessible inside each app's workspace.
-*   **Cost Efficiency:** Maximizing local open-source models (via Ollama) to keep operational costs close to $0.
+*   **Resource & Cost Efficiency (Low Local RAM):** Utilizing cloud-hosted LLM endpoints and remote cloud databases (e.g. Supabase, Firebase) to keep local CPU and memory usage to an absolute minimum (no heavy local Ollama processing required).
 
 ---
 
@@ -87,6 +87,15 @@ When the Dashboard tab is active, a sidebar displays 10 specific modules:
 ---
 
 ## 4. Security & Privacy
-*   **Sandboxing:** All client code must execute in isolated local directories.
-*   **Credential Storage:** API keys for OpenAI/Anthropic/Gemini must be stored in a local `.env` file on the developer's machine and never transmitted to external dashboard servers.
-*   **Database Isolation:** Client database connections must use local environment variables to connect directly to the respective staging/production databases.
+*   **Sandboxing:** All client code must execute in isolated workspaces.
+*   **Credential Storage:** API keys for OpenAI/Anthropic/Gemini must be stored in secure local environment variables or cloud vault secrets and never exposed in public repositories.
+*   **Database Isolation:** Client database connections must use local environment variables or IAM access keys to connect directly to the respective staging/production databases.
+
+---
+
+## 5. Legal & Regulatory Compliance
+To ensure the platform is legal, compliant, and ready for commercial operation by **Bobbie Digital LLC**, the application includes:
+*   **Standard Terms of Service (ToS):** Outlining user responsibilities, licensing terms, and liability disclaimers for deployed applications.
+*   **GDPR / CCPA Privacy Policy:** A mandatory, detailed disclosure showing how user accounts, billing information, and code contexts are collected, processed (specifically noting third-party LLM API routing), and stored.
+*   **Data Portability & Deletion:** Direct UI functionality in the CRM allowing users to download their data (JSON) or permanently delete their account profile (Right to be Forgotten).
+*   **Cookie & Tracker Consent:** A fully compliant Cookie Banner showing cookie use, providing active opt-in/opt-out toggles for tracking scripts.
