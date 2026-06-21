@@ -1,6 +1,6 @@
 # System Blueprint & Development Roadmap
 
-This document outlines the system architecture, component schemas, and phased roadmap for building the **Bobbie Digital Hub (BDH)**.
+This document outlines the system architecture, component schemas, and phased roadmap for building **Omnigent**.
 
 ---
 

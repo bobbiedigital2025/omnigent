@@ -1,6 +1,6 @@
 # Project Design Requirements (PDR)
 
-**Project Name:** Bobbie Digital Hub (BDH)  
+**Project Name:** Omnigent  
 **Author:** Bobbie Digital LLC & Antigravity  
 **Version:** 1.0.0  
 **Status:** Draft / Proposed  
@@ -8,7 +8,7 @@
 ---
 
 ## 1. Executive Summary & Goals
-The goal of the **Bobbie Digital Hub** is to build a cloud-first hybrid, low-overhead application development and management portal. The system is tailored to allow a single developer or small agency to develop and maintain client applications with minimal local resource footprint, zero hosting/licensing fees for administrative suites, and agentic automation for support, health, and code generation.
+The goal of **Omnigent** is to build a cloud-first hybrid, low-overhead application development and management portal. The system is tailored to allow a single developer or small agency to develop and maintain client applications with minimal local resource footprint, zero hosting/licensing fees for administrative suites, and agentic automation for support, health, and code generation.
 
 ### Key Objectives
 *   **Decoupled Multi-Agent Systems:** A system where specialized agents run in the background and report state changes to a central event bus.

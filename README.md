@@ -1,6 +1,6 @@
-# Bobbie Digital Hub (BDH)
+# Omnigent
 
-The Bobbie Digital Hub is a local-first, agent-augmented workspace and application lifecycle manager designed for **Bobbie Digital LLC**. It enables a single developer to design, build, test, deploy, monitor, and support multiple client applications from a single unified interface.
+Omnigent is a cloud-first, agent-augmented workspace and application lifecycle manager designed for **Bobbie Digital LLC**. It enables a single developer to design, build, test, deploy, monitor, and support multiple client applications from a single unified interface.
 
 ---
 
