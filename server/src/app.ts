@@ -5,11 +5,15 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
 const app = express();
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
 
 // Security Hardening Headers
 app.use(helmet({
   contentSecurityPolicy: false // Disabled for dev mockup iframe previewing compatibility
 }));
+
+app.use(express.json({ limit: '10kb' }));
 
 // API Rate Limiting to prevent brute-force and DDoS
 const apiLimiter = rateLimit({
@@ -22,14 +26,21 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 // CORS settings - restricted to local clients during staging, configurable for production
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : ['http://localhost:5173'];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*'
+  origin: allowedOrigins,
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true
 }));
-app.use(express.json());
 
 // Dev-only flag to allow granting admin access for testing.
 // Set `ALLOW_DEV_ADMIN_FREE_ACCESS=true` in the environment to enable.
-const ALLOW_DEV_ADMIN_FREE_ACCESS = process.env.ALLOW_DEV_ADMIN_FREE_ACCESS === 'true' || process.env.NODE_ENV === 'development';
+// Defaults to disabled unless explicitly configured.
+const ALLOW_DEV_ADMIN_FREE_ACCESS = process.env.ALLOW_DEV_ADMIN_FREE_ACCESS === 'true';
 
 // Express REST endpoints
 app.get('/health', (req, res) => {

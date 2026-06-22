@@ -88,7 +88,9 @@ When the Dashboard tab is active, a sidebar displays 10 specific modules:
 
 ## 4. Security & Privacy
 *   **Sandboxing:** All client code must execute in isolated workspaces.
+*   **Runtime Hardening:** The Express backend must disable `x-powered-by`, use `helmet`, enforce `trust proxy` where applicable, limit JSON payload sizes, and restrict CORS to trusted origins.
 *   **Credential Storage:** API keys for OpenAI/Anthropic/Gemini must be stored in secure local environment variables or cloud vault secrets and never exposed in public repositories.
+*   **Dev Endpoint Controls:** Any dev-only access endpoints must remain disabled by default and only enabled explicitly via environment configuration.
 *   **Database Isolation:** Client database connections must use local environment variables or IAM access keys to connect directly to the respective staging/production databases.
 
 ---

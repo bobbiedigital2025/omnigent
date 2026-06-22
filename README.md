@@ -55,9 +55,23 @@ bobbie-digital-hub/
 
 ## 🏁 Getting Started
 
-*(Development instructions will be populated here once Phase 1 begins).*
+1.  `cd server`
+2.  `npm install`
+3.  `cd ../client`
+4.  `npm install`
+5.  `cd ../server`
+6.  `npm run dev`
+7.  `cd ../client`
+8.  `npm run dev`
 
-## Dev-only admin helper
+> The current setup uses a local Express backend on port `3000` and a Vite frontend on port `5173`.
+
+## ✅ Current Status
+
+*   Phase 2 UI dashboard modules are implemented.
+*   Phase 3 agent handoff visualizer is complete in the React client.
+*   Server security hardening has been applied (`helmet`, CORS restrictions, `trust proxy`, request size limits, hidden `x-powered-by`).
+*   Client API and WebSocket communication now use same-origin relative connections for safer deployment.
 
 For development and testing, you can enable a safe, auditable dev endpoint that grants or revokes the `Admin` role to a user in the mock CRM. This is intentionally gated behind an environment flag and should NEVER be enabled in production.
 

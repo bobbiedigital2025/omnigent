@@ -113,9 +113,19 @@ function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+  const apiGet = (path: string) => fetch(`${BASE_URL}${path}`).then(res => res.json());
+  const apiPost = (path: string, body?: any) => fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin'
+  }).then(res => res.json());
+
   // Setup WS Connection
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:3000');
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${scheme}://${window.location.host}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -160,20 +170,17 @@ function App() {
   // Poll Telemetry & Load CRM data
   useEffect(() => {
     const fetchStats = () => {
-      fetch('http://localhost:3000/api/telemetry')
-        .then(res => res.json())
+      apiGet('/api/telemetry')
         .then(data => setTelemetry(data))
         .catch(err => console.log('Failed to fetch telemetry:', err));
     };
 
     const fetchCRM = () => {
-      fetch('http://localhost:3000/api/users')
-        .then(res => res.json())
+      apiGet('/api/users')
         .then(data => setUsers(data))
         .catch(err => console.log('Failed to fetch CRM users:', err));
 
-      fetch('http://localhost:3000/api/tickets')
-        .then(res => res.json())
+      apiGet('/api/tickets')
         .then(data => setTickets(data))
         .catch(err => console.log('Failed to fetch support tickets:', err));
     };
@@ -224,12 +231,7 @@ function App() {
       }));
     }
 
-    // Call API endpoint
-    fetch('http://localhost:3000/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
-    }).catch(err => console.error('Error posting message:', err));
+    apiPost('/api/chat', { message: text }).catch(err => console.error('Error posting message:', err));
   };
 
   // Run scaffold
@@ -245,12 +247,7 @@ function App() {
   // Send Ticket Reply
   const sendTicketReply = () => {
     if (!replyText.trim()) return;
-    fetch('http://localhost:3000/api/tickets/reply', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticketId: selectedTicketId, text: replyText })
-    })
-      .then(res => res.json())
+    apiPost('/api/tickets/reply', { ticketId: selectedTicketId, text: replyText })
       .then(data => {
         setTickets(prev => prev.map(t => t.id === selectedTicketId ? data.ticket : t));
         setReplyText('');
@@ -260,21 +257,13 @@ function App() {
 
   // Request Agent Draft Assist
   const requestDraftAssist = () => {
-    fetch('http://localhost:3000/api/tickets/draft-assist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticketId: selectedTicketId })
-    }).catch(err => console.error('Error requesting draft assist:', err));
+    apiPost('/api/tickets/draft-assist', { ticketId: selectedTicketId })
+      .catch(err => console.error('Error requesting draft assist:', err));
   };
 
   // Export GDPR user data
   const exportUserData = (userId: string) => {
-    fetch('http://localhost:3000/api/users/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId })
-    })
-      .then(res => res.json())
+    apiPost('/api/users/export', { id: userId })
       .then(data => {
         const fileData = JSON.stringify(data.data, null, 2);
         const blob = new Blob([fileData], { type: 'application/json' });
@@ -291,12 +280,7 @@ function App() {
   const deleteUserData = (userId: string) => {
     if (!confirm('Are you sure you want to permanently delete this user profile? This fulfills CCPA/GDPR Right to be Forgotten requirements.')) return;
     
-    fetch('http://localhost:3000/api/users/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: userId })
-    })
-      .then(res => res.json())
+    apiPost('/api/users/delete', { id: userId })
       .then(() => {
         setUsers(prev => prev.filter(u => u.id !== userId));
       })
