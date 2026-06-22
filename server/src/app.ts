@@ -3,6 +3,8 @@ import WebSocket from 'ws';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { listHuggingFaceModels, downloadHuggingFaceAgent } from './agentCatalog';
+import { EventMessage } from './types';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -46,18 +48,6 @@ const ALLOW_DEV_ADMIN_FREE_ACCESS = process.env.ALLOW_DEV_ADMIN_FREE_ACCESS === 
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', service: 'Omnigent Server' });
 });
-
-// Event Schema for Blackboard Pattern
-export interface EventMessage {
-  eventId: string;
-  taskId: string;
-  timestamp: string;
-  sender: string;
-  receiver: string;
-  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
-  message: string;
-  metadata?: any;
-}
 
 // In-memory databases for Mock CRM and Support
 let mockUsers = [
@@ -259,6 +249,27 @@ app.post('/api/users/delete', (req, res) => {
 
 app.get('/api/tickets', (req, res) => {
   res.json(mockTickets);
+});
+
+app.get('/api/agents/huggingface', async (req, res) => {
+  const query = String(req.query.q || 'agent');
+  try {
+    const models = await listHuggingFaceModels(query);
+    res.json({ status: 'success', models });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list Hugging Face models', detail: (err as Error).message });
+  }
+});
+
+app.post('/api/agents/huggingface/download', async (req, res) => {
+  const { modelId } = req.body;
+  if (!modelId) return res.status(400).json({ error: 'modelId is required' });
+  try {
+    const result = await downloadHuggingFaceAgent(modelId);
+    res.json({ status: 'success', result });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to download Hugging Face model', detail: (err as Error).message });
+  }
 });
 
 // Dev-only endpoints: safely grant/revoke Admin role for testing when flag is enabled

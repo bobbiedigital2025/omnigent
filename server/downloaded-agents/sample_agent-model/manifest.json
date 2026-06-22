@@ -1,0 +1,17 @@
+{
+  "modelId": "sample/agent-model",
+  "downloadedAt": "2026-06-22T13:05:56.323Z",
+  "metadata": {
+    "id": "sample/agent-model",
+    "author": "sample-author",
+    "tags": [
+      "agent"
+    ],
+    "pipeline_tag": "text-generation",
+    "downloads": 1000,
+    "description": "Sample Agent",
+    "license": null
+  },
+  "source": "huggingface",
+  "sourceUrl": "https://huggingface.co/sample/agent-model"
+}

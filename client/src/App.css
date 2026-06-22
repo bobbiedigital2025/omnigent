@@ -287,6 +287,17 @@ button {
   border-color: rgba(124, 58, 237, 0.28);
 }
 
+.sidebar-badge {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(124, 58, 237, 0.14);
+  color: var(--text);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+}
+
 .dashboard-content {
   min-height: 100%;
 }

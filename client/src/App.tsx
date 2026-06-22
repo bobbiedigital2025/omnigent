@@ -5,7 +5,7 @@ import 'reactflow/dist/style.css';
 import { 
   Terminal, Users, LifeBuoy, Activity, Megaphone, 
   Globe, Database, Shield, Code, Workflow, Send, Eye,
-  Trash2, Download, X, Play, RefreshCw, CheckCircle, ShieldAlert, FileCode
+  Trash2, Download, X, Play, RefreshCw, CheckCircle, ShieldAlert, FileCode, Search
 } from 'lucide-react';
 import './App.css';
 
@@ -44,6 +44,15 @@ interface Ticket {
   priority: string;
   messages: Array<{ sender: 'user' | 'support'; text: string; time: string }>;
   draft?: string;
+}
+
+interface HuggingFaceModelInfo {
+  id: string;
+  author: string;
+  tags: string[];
+  pipeline_tag: string | null;
+  downloads: number;
+  description?: string;
 }
 
 function App() {
@@ -92,6 +101,12 @@ function App() {
 
   // Code Explorer states
   const [selectedFile, setSelectedFile] = useState('src/App.tsx');
+  const [hfSearchTerm, setHfSearchTerm] = useState('agent');
+  const [huggingFaceModels, setHuggingFaceModels] = useState<HuggingFaceModelInfo[]>([]);
+  const [hfLoading, setHfLoading] = useState(false);
+  const [hfError, setHfError] = useState<string | null>(null);
+  const [hfDownloadMessage, setHfDownloadMessage] = useState<string | null>(null);
+
   const fileContents: Record<string, string> = {
     'src/App.tsx': `import React from 'react';\n\nexport default function App() {\n  return (\n    <div className="landing-page">\n      <h1>Welcome to Bobbie Digital LLC</h1>\n      <p>Custom agentic workflows and web application engineering.</p>\n    </div>\n  );\n}`,
     'src/server.ts': `import express from 'express';\nimport http from 'http';\n\nconst app = express();\nconst server = http.createServer(app);\n\n// Example: ensure socket listeners are cleaned up on close to avoid leaks\nserver.on('connection', (socket) => {\n  console.log('New client connection');\n  socket.on('close', () => {\n    socket.removeAllListeners();\n    console.log('Client disconnected and listeners removed');\n  });\n});\n`,
@@ -194,6 +209,45 @@ function App() {
 
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (activeModule === 'agents') {
+      fetchHuggingFaceModels(hfSearchTerm);
+    }
+  }, [activeModule]);
+
+  const fetchHuggingFaceModels = (query = 'agent') => {
+    setHfLoading(true);
+    setHfError(null);
+
+    apiGet(`/api/agents/huggingface?q=${encodeURIComponent(query)}`)
+      .then(data => {
+        if (data?.status === 'success' && Array.isArray(data.models)) {
+          setHuggingFaceModels(data.models);
+        } else {
+          setHfError('No models found for that query.');
+        }
+      })
+      .catch(err => {
+        setHfError(err.message || 'Failed to load Hugging Face models.');
+      })
+      .finally(() => setHfLoading(false));
+  };
+
+  const downloadHuggingFaceAgentModel = (modelId: string) => {
+    setHfDownloadMessage(`Downloading ${modelId}...`);
+    apiPost('/api/agents/huggingface/download', { modelId })
+      .then(data => {
+        if (data?.status === 'success') {
+          setHfDownloadMessage(`Downloaded ${modelId} to ${data.result.localPath}`);
+        } else {
+          setHfDownloadMessage(`Download failed: ${data?.error || 'unknown error'}`);
+        }
+      })
+      .catch(err => {
+        setHfDownloadMessage(`Download failed: ${err.message || err}`);
+      });
+  };
 
   // Update selected ticket draft text
   useEffect(() => {
@@ -524,6 +578,7 @@ function App() {
                 </button>
                 <button className={`sidebar-btn ${activeModule === 'agents' ? 'active' : ''}`} onClick={() => setActiveModule('agents')}>
                   <Workflow size={15} /> Agents Visualizer
+                  <span className="sidebar-badge">HF</span>
                 </button>
               </div>
 
@@ -556,6 +611,18 @@ function App() {
                           </a>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="metric-card" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h4>Agent Browser Shortcut</h4>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                          Quickly open the Hugging Face Agent Browser to find and download new agent models.
+                        </p>
+                      </div>
+                      <button className="btn btn-primary" type="button" onClick={() => setActiveModule('agents')}>
+                        Open Agent Browser
+                      </button>
                     </div>
 
                     <h4 style={{ marginBottom: '8px' }}>Live Build Console Logs</h4>
@@ -982,6 +1049,56 @@ function App() {
                       <h4 style={{ marginTop: '20px', marginBottom: '8px' }}>Raw Blackboard JSON Event Feed</h4>
                       <div className="blackboard-log-output">
                         {JSON.stringify(eventLogs, null, 2)}
+                      </div>
+
+                      <div className="huggingface-agent-panel" style={{ marginTop: '24px' }}>
+                        <div className="section-header">
+                          <div className="section-title">
+                            <h3>Hugging Face Agent Browser</h3>
+                            <p>Search and download agent models from Hugging Face into the local workspace.</p>
+                          </div>
+                        </div>
+
+                        <div className="hf-search-row" style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+                          <input
+                            type="text"
+                            className="search-input"
+                            value={hfSearchTerm}
+                            onChange={(e) => setHfSearchTerm(e.target.value)}
+                            placeholder="Search Hugging Face agents..."
+                            style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--panel-bg)' }}
+                          />
+                          <button className="action-btn" type="button" onClick={() => fetchHuggingFaceModels(hfSearchTerm)}>
+                            <Search /> Search
+                          </button>
+                        </div>
+
+                        {hfLoading && <div className="status-message">Loading models...</div>}
+                        {hfError && <div className="status-message error">{hfError}</div>}
+                        {hfDownloadMessage && <div className="status-message">{hfDownloadMessage}</div>}
+
+                        <div className="hf-model-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: '14px' }}>
+                          {huggingFaceModels.map((model) => (
+                            <div key={model.id} className="hf-model-card" style={{ border: '1px solid var(--border-color)', borderRadius: '14px', padding: '16px', background: 'var(--panel-bg)' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+                                <div>
+                                  <h5 style={{ margin: 0 }}>{model.id}</h5>
+                                  <p className="text-muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>by {model.author}</p>
+                                </div>
+                                <Download size={18} />
+                              </div>
+                              <p style={{ margin: '10px 0 0', fontSize: '13px', minHeight: '46px', color: 'var(--text-muted)' }}>
+                                {model.description || model.pipeline_tag || 'No description provided.'}
+                              </p>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{model.downloads.toLocaleString()} downloads</span>
+                                <button className="btn btn-primary" type="button" onClick={() => downloadHuggingFaceAgentModel(model.id)}>
+                                  Download
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
