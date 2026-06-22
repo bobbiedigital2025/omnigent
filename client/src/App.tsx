@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import ReactFlow, { ReactFlowProvider, Background, Controls, MiniMap, Node, Edge } from 'reactflow';
+import 'reactflow/dist/style.css';
 import { 
   Terminal, Users, LifeBuoy, Activity, Megaphone, 
   Globe, Database, Shield, Code, Workflow, Send, Eye,
@@ -91,7 +93,7 @@ function App() {
   const [selectedFile, setSelectedFile] = useState('src/App.tsx');
   const fileContents: Record<string, string> = {
     'src/App.tsx': `import React from 'react';\n\nexport default function App() {\n  return (\n    <div className="landing-page">\n      <h1>Welcome to Bobbie Digital LLC</h1>\n      <p>Custom agentic workflows and web application engineering.</p>\n    </div>\n  );\n}`,
-    'src/server.ts': `import express from 'express';\nimport http from 'http';\n\nconst app = express();\nconst server = http.createServer(app);\n\n// TODO: Setup unclosed websocket event listener\nserver.on('connection', (socket) => {\n  console.log('New client connection');\n  // Memory leak: listeners are not cleaned up on socket close\n});`,
+    'src/server.ts': `import express from 'express';\nimport http from 'http';\n\nconst app = express();\nconst server = http.createServer(app);\n\n// Example: ensure socket listeners are cleaned up on close to avoid leaks\nserver.on('connection', (socket) => {\n  console.log('New client connection');\n  socket.on('close', () => {\n    socket.removeAllListeners();\n    console.log('Client disconnected and listeners removed');\n  });\n});\n`,
     'package.json': `{\n  "name": "client-app",\n  "private": true,\n  "version": "1.0.0",\n  "dependencies": {\n    "react": "^19.0.0"\n  }\n}`,
     'git diff': `diff --git a/src/server.ts b/src/server.ts\nindex e3490b..fa0102 100644\n--- a/src/server.ts\n+++ b/src/server.ts\n@@ -8,5 +8,6 @@ const server = http.createServer(app);\n \n server.on('connection', (socket) => {\n   console.log('New client connection');\n+  socket.on('close', () => socket.removeAllListeners());\n });`
   };
@@ -305,6 +307,32 @@ function App() {
     if (eventLogs.length === 0) return '';
     const lastEvent = eventLogs[eventLogs.length - 1];
     return lastEvent.status === 'IN_PROGRESS' ? lastEvent.sender : '';
+  };
+
+  // React Flow nodes/edges for Agent Graph (Phase 3)
+  const [rfNodes, setRfNodes] = useState<Node[]>([
+    { id: 'main', data: { label: 'Main Bot' }, position: { x: 50, y: 50 } },
+    { id: 'coder', data: { label: 'Coder / Scaffold' }, position: { x: 300, y: 50 } },
+    { id: 'support', data: { label: 'Support Agent' }, position: { x: 550, y: 50 } }
+  ]);
+
+  const [rfEdges, setRfEdges] = useState<Edge[]>([
+    { id: 'e1-2', source: 'main', target: 'coder', animated: true },
+    { id: 'e2-3', source: 'coder', target: 'support' }
+  ]);
+
+  // Drawer inspector state
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorData, setInspectorData] = useState<any>(null);
+
+  const openInspectorForEvent = (evt: EventMessage) => {
+    setInspectorData(evt);
+    setInspectorOpen(true);
+  };
+
+  const openInspectorForNode = (node: Node) => {
+    setInspectorData({ node });
+    setInspectorOpen(true);
   };
 
   return (
@@ -876,6 +904,15 @@ function App() {
 
                     <div className="visualizer-panel">
                       <div className="agent-graph">
+                        <div className="reactflow-wrapper" style={{ height: 220 }}>
+                          <ReactFlowProvider>
+                            <ReactFlow nodes={rfNodes} edges={rfEdges} onNodeClick={(evt, node) => openInspectorForNode(node as Node)}>
+                              <Background gap={12} />
+                              <Controls />
+                              <MiniMap />
+                            </ReactFlow>
+                          </ReactFlowProvider>
+                        </div>
                         <svg className="graph-svg-lines">
                           <line x1="20%" y1="50%" x2="50%" y2="50%" stroke="var(--border-color)" strokeWidth="2" />
                           <line x1="50%" y1="50%" x2="80%" y2="50%" stroke="var(--border-color)" strokeWidth="2" />
@@ -909,7 +946,7 @@ function App() {
                       <h4 style={{ marginBottom: '8px' }}>Blackboard Chronicles (Timeline)</h4>
                       <div className="sequence-timeline">
                         {eventLogs.map((log) => (
-                          <div key={log.eventId} className={`sequence-step ${log.status === 'COMPLETED' ? 'completed' : 'active'}`}>
+                          <div key={log.eventId} className={`sequence-step ${log.status === 'COMPLETED' ? 'completed' : 'active'}`} onClick={() => openInspectorForEvent(log)}>
                             <h5>{log.sender} ➔ {log.receiver} <span className="time">{new Date(log.timestamp).toLocaleTimeString()}</span></h5>
                             <p>{log.message} (Status: {log.status})</p>
                           </div>
@@ -1045,6 +1082,24 @@ function App() {
             </div>
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" onClick={() => setShowTermsModal(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inspectorOpen && (
+        <div className="drawer-overlay" onClick={() => setInspectorOpen(false)}>
+          <div className="drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-header">
+              <h4>Inspector</h4>
+              <button className="btn" onClick={() => setInspectorOpen(false)}><X size={16} /></button>
+            </div>
+            <div className="drawer-body">
+              {inspectorData ? (
+                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{JSON.stringify(inspectorData, null, 2)}</pre>
+              ) : (
+                <div>No inspector data</div>
+              )}
             </div>
           </div>
         </div>
