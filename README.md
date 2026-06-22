@@ -13,7 +13,9 @@ Omnigent is a cloud-first, agent-augmented workspace and application lifecycle m
         *   **App Overview:** Live health metrics and task lists.
         *   **Users (Live CRM):** Customer profiles, accounts, and signups.
         *   **Support Ticket CRM:** Integrated email inbox (`support@yourdomain.com`) with agent-assisted reply drafting.
-        *   **Code & Agents:** Code file trees, diff viewers, and the agent handoff visualization panel (Graph View vs. Sequence Timeline).
+        *   **Code & Agents:** Code file trees, diff viewers, the agent handoff visualization panel (Graph View vs. Sequence Timeline), and **Hugging Face model browser**.
+*   **Flexible Model Selection:** Browse and download specialized agent models directly from Hugging Face Hub. Choose from thousands of open-source models (code generation, domain-specific reasoning, support automation) tailored to your workflow.
+*   **LLM Routing & Fallback:** Intelligently route user prompts to OpenAI/Gemini APIs with automatic local fallback if cloud APIs are unavailable or rate-limited.
 *   **Hybrid Model Architecture:** Minimize API token costs by routing routine tasks to free local models (via Ollama) and routing complex orchestration/logic to high-reasoning cloud models (via Gemini/Claude).
 
 ---
@@ -21,10 +23,12 @@ Omnigent is a cloud-first, agent-augmented workspace and application lifecycle m
 ## 🛠️ Technology Stack
 
 *   **Frontend:** React, Vite, TypeScript, Tailwind CSS, Monaco Editor (for code previews), React Flow (for handoff graphs).
-*   **Backend Server:** Node.js (Express) or Python (FastAPI) running locally on localhost.
+*   **Backend Server:** Node.js (Express) running locally on localhost.
 *   **Agent Orchestration:** Standardized JSON event bus (Blackboard pattern).
-*   **Local Models:** Ollama (Qwen 2.5 Coder, Llama 3).
-*   **Cloud Models:** LiteLLM / unified API gateway routing to Gemini 2.5 Flash / Claude 3.5 Sonnet.
+*   **Model Discovery & Selection:** Hugging Face Hub API integration with model browser UI and one-click download.
+*   **LLM Routing:** OpenAI API with intelligent routing, local fallback responses, and task-type inference.
+*   **Local Models:** Ollama (Qwen 2.5 Coder, Llama 3) and downloaded Hugging Face models.
+*   **Cloud Models:** OpenAI (GPT-4 / GPT-3.5-Turbo), Gemini 2.5 Flash (via future LiteLLM integration).
 *   **Integrations:** Model Context Protocol (MCP) servers (Filesystem, Terminal, Database).
 
 ---
@@ -68,10 +72,15 @@ bobbie-digital-hub/
 
 ## ✅ Current Status
 
-*   Phase 2 UI dashboard modules are implemented.
-*   Phase 3 agent handoff visualizer is complete in the React client.
-*   Server security hardening has been applied (`helmet`, CORS restrictions, `trust proxy`, request size limits, hidden `x-powered-by`).
-*   Client API and WebSocket communication now use same-origin relative connections for safer deployment.
+*   **Phase 2:** UI dashboard modules are fully implemented with all 10 sidebar sections.
+*   **Phase 3:** Agent handoff visualizer is complete in the React client (Graph View, Sequence Timeline, Blackboard Logs).
+*   **Phase 4:** LLM routing engine and Hugging Face model selection are complete:
+    - OpenAI API integration with automatic fallback logic
+    - Task type inference from natural language prompts
+    - Hugging Face model browser with download capability
+    - Backend async chat endpoint with agent task routing
+*   **Security:** Server hardening applied (`helmet`, CORS restrictions, rate limiting, request size limits, hidden `x-powered-by`).
+*   **Client:** API and WebSocket communication use same-origin relative connections for safer deployment.
 
 For development and testing, you can enable a safe, auditable dev endpoint that grants or revokes the `Admin` role to a user in the mock CRM. This is intentionally gated behind an environment flag and should NEVER be enabled in production.
 

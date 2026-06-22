@@ -42,16 +42,11 @@ When the Dashboard tab is active, a sidebar displays 10 specific modules:
 *   **Integrations:** Configures local MCP servers (e.g., enabling local file access, running SQL databases, or calling external search APIs).
 *   **Security:** Lists firewall blocks, security scans, outdated npm packages, and access logs.
 *   **Code:** A full IDE-style workspace containing a directory tree, file previewer, and git diff review screen.
-*   **Agents (Visualizer):** The agent handoff interface. Toggles between:
-    *   *Graph View:* Node-link diagram of running background agents.
-    *   *Sequence View:* Chronological vertical timeline of agent handoffs.
-    *   *Blackboard Logs:* Raw log entries showing JSON-RPC messages flowing between agents.
-
----
-
-## 3. Core System Workflows
-
-### 3.1 Scaffolding a New Client App
+    *   **Agents (Model Browser):** Browse and download specialized agent models from Hugging Face Hub. Features:
+        *   *Model Search:* Search by task type (code generation, support automation, domain-specific reasoning).
+        *   *Model Details:* View model metadata, ratings, download count, and compatibility.
+        *   *One-Click Download:* Download agent manifests and configuration to local workspace.
+        *   *Handoff Visualizer:* Toggles between Graph View (node-link diagram of running agents), Sequence View (chronological timeline of agent handoffs), and Blackboard Logs (JSON-RPC messages).
 1.  User asks the Main Agent: *"Set up a new landing page app for client X."*
 2.  Main Agent writes a task request to the Blackboard event bus.
 3.  `Scaffold Agent` claims the task, creates a local directory, and initializes a React + Vite boilerplate.

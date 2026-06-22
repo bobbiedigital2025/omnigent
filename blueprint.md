@@ -111,9 +111,14 @@ gantt
     *   Integrate a mockup Monaco Editor for the "Code" module and standard dashboard grids.
 
 ## 3.5 Current Implementation Status
-*   Phase 2 dashboard UI is implemented and functional.
-*   Phase 3 visualizer has been completed and is now part of the React client.
-*   Security hardening is active in the backend and client communications.
+*   Phase 2 dashboard UI is implemented and functional with all 10 sidebar modules.
+*   Phase 3 visualizer has been completed and is now part of the React client (Graph, Sequence, Logs views).
+*   Phase 4 LLM routing is now complete:
+    - OpenAI integration with fallback logic
+    - Hugging Face model browser and download capability
+    - Async task dispatch with Blackboard event emission
+    - Intelligent prompt-to-agent routing
+*   Security hardening is active in the backend and client communications (helmet, CORS, rate-limiting, payload limits).
 
 ### Phase 3: Visual Handoff & Flow (The Visualizer)
 *   **Goal:** Render the dynamic sequences and graphs.
@@ -122,13 +127,19 @@ gantt
     *   Build a custom chronological waterfall component (Sequence Timeline) that renders WebSocket events.
     *   Implement the Drawer Inspector to inspect prompts/response parameters for selected events.
 
-### Phase 4: LLM API Routing & Agent Workers
-*   **Goal:** Connect the Main Agent and background workers using cloud LLM APIs to conserve local memory.
-*   **Tasks:**
-    *   Integrate LiteLLM / Gemini API routing keys securely.
-    *   Set up the Orchestrator loop: Main Agent parses prompts, breaks down tasks, and publishes them.
-    *   Connect the Coder Agent and Searcher Agent to read/write files via local/cloud MCP server integration.
-    *   Configure local fallback paths if cloud APIs encounter rate-limits.
+### Phase 4: LLM API Routing, Model Selection & Agent Workers
+*   **Goal:** Connect the Main Agent and background workers using cloud LLM APIs, enable Hugging Face model discovery, and conserve local memory.
+*   **Completed Tasks:**
+    *   ✅ Integrate OpenAI API routing with task-type inference (routes prompts to appropriate agent).
+    *   ✅ Implement local fallback responses when cloud APIs are unavailable or rate-limited.
+    *   ✅ Build Hugging Face Hub integration: model search, download, and manifest management.
+    *   ✅ Create dashboard "Agents" panel with Hugging Face model browser UI.
+    *   ✅ Implement backend async `/api/chat` endpoint with LLM routing and agent task dispatch.
+    *   ✅ Set up event emission to Blackboard for task tracking and real-time UI updates.
+*   **Pending Tasks:**
+    *   Integrate LiteLLM for multi-provider routing (Gemini, Claude, local Ollama).
+    *   Connect background agents to read/write files via local/cloud MCP server integration.
+    *   Enhance task-type inference with semantic analysis of user prompts.
 
 ### Phase 5: CRM, Support Mail, & Production Operations
 *   **Goal:** Connect the platform to live production apps and set up legal/compliance structures.
