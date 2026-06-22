@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import ReactFlow, { ReactFlowProvider, Background, Controls, MiniMap, Node, Edge } from 'reactflow';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import ReactFlow, { ReactFlowProvider, Background, Controls, MiniMap } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { 
   Terminal, Users, LifeBuoy, Activity, Megaphone, 
@@ -309,29 +310,70 @@ function App() {
     return lastEvent.status === 'IN_PROGRESS' ? lastEvent.sender : '';
   };
 
-  // React Flow nodes/edges for Agent Graph (Phase 3)
-  const [rfNodes, setRfNodes] = useState<Node[]>([
-    { id: 'main', data: { label: 'Main Bot' }, position: { x: 50, y: 50 } },
-    { id: 'coder', data: { label: 'Coder / Scaffold' }, position: { x: 300, y: 50 } },
-    { id: 'support', data: { label: 'Support Agent' }, position: { x: 550, y: 50 } }
-  ]);
-
-  const [rfEdges, setRfEdges] = useState<Edge[]>([
-    { id: 'e1-2', source: 'main', target: 'coder', animated: true },
-    { id: 'e2-3', source: 'coder', target: 'support' }
-  ]);
-
-  // Drawer inspector state
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [inspectorData, setInspectorData] = useState<any>(null);
 
+  const activeAgentNames = useMemo(() => {
+    const set = new Set<string>();
+    eventLogs.forEach((evt) => {
+      set.add(evt.sender);
+      set.add(evt.receiver);
+    });
+    return set;
+  }, [eventLogs]);
+
+  const rfNodes = useMemo<Node[]>(() => [
+    {
+      id: 'main',
+      data: { label: 'Main Bot' },
+      position: { x: 50, y: 50 },
+      style: {
+        background: activeAgentNames.has('Main Bot') ? 'rgba(124, 58, 237, 0.25)' : 'rgba(15, 23, 42, 0.95)',
+        border: activeAgentNames.has('Main Bot') ? '1px solid #7c3aed' : '1px solid rgba(255,255,255,0.08)',
+      }
+    },
+    {
+      id: 'coder',
+      data: { label: 'Coder / Scaffold' },
+      position: { x: 300, y: 50 },
+      style: {
+        background: activeAgentNames.has('Scaffold Agent') || activeAgentNames.has('Coder Agent') ? 'rgba(59, 130, 246, 0.18)' : 'rgba(15, 23, 42, 0.95)',
+        border: activeAgentNames.has('Scaffold Agent') || activeAgentNames.has('Coder Agent') ? '1px solid #2563eb' : '1px solid rgba(255,255,255,0.08)',
+      }
+    },
+    {
+      id: 'support',
+      data: { label: 'Support Agent' },
+      position: { x: 550, y: 50 },
+      style: {
+        background: activeAgentNames.has('Support Agent') ? 'rgba(34, 197, 94, 0.18)' : 'rgba(15, 23, 42, 0.95)',
+        border: activeAgentNames.has('Support Agent') ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.08)',
+      }
+    }
+  ], [activeAgentNames]);
+
+  const rfEdges = useMemo<Edge[]>(() => [
+    {
+      id: 'e1-2',
+      source: 'main',
+      target: 'coder',
+      animated: activeAgentNames.has('Scaffold Agent') || activeAgentNames.has('Coder Agent')
+    },
+    {
+      id: 'e2-3',
+      source: 'coder',
+      target: 'support',
+      animated: activeAgentNames.has('Support Agent')
+    }
+  ], [activeAgentNames]);
+
   const openInspectorForEvent = (evt: EventMessage) => {
-    setInspectorData(evt);
+    setInspectorData({ type: 'event', event: evt });
     setInspectorOpen(true);
   };
 
   const openInspectorForNode = (node: Node) => {
-    setInspectorData({ node });
+    setInspectorData({ type: 'node', node });
     setInspectorOpen(true);
   };
 
@@ -906,7 +948,7 @@ function App() {
                       <div className="agent-graph">
                         <div className="reactflow-wrapper" style={{ height: 220 }}>
                           <ReactFlowProvider>
-                            <ReactFlow nodes={rfNodes} edges={rfEdges} onNodeClick={(evt, node) => openInspectorForNode(node as Node)}>
+                            <ReactFlow nodes={rfNodes} edges={rfEdges} onNodeClick={(_, node) => openInspectorForNode(node as Node)}>
                               <Background gap={12} />
                               <Controls />
                               <MiniMap />
