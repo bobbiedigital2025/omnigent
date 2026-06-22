@@ -56,3 +56,14 @@ bobbie-digital-hub/
 ## 🏁 Getting Started
 
 *(Development instructions will be populated here once Phase 1 begins).*
+
+## Dev-only admin helper
+
+For development and testing, you can enable a safe, auditable dev endpoint that grants or revokes the `Admin` role to a user in the mock CRM. This is intentionally gated behind an environment flag and should NEVER be enabled in production.
+
+- Enable by setting the environment variable: `ALLOW_DEV_ADMIN_FREE_ACCESS=true` (or run in `NODE_ENV=development`).
+- Endpoints (POST JSON { "email": "user@example.com" }):
+    - `/api/admin/grant-dev` — Grants `Admin` role to the user with the given email.
+    - `/api/admin/revoke-dev` — Reverts the user's role to `User`.
+
+The server will emit a blackboard event when these endpoints are called so actions are visible in the audit/event stream.

@@ -27,6 +27,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Dev-only flag to allow granting admin access for testing.
+// Set `ALLOW_DEV_ADMIN_FREE_ACCESS=true` in the environment to enable.
+const ALLOW_DEV_ADMIN_FREE_ACCESS = process.env.ALLOW_DEV_ADMIN_FREE_ACCESS === 'true' || process.env.NODE_ENV === 'development';
+
 // Express REST endpoints
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', service: 'Omnigent Server' });
@@ -244,6 +248,55 @@ app.post('/api/users/delete', (req, res) => {
 
 app.get('/api/tickets', (req, res) => {
   res.json(mockTickets);
+});
+
+// Dev-only endpoints: safely grant/revoke Admin role for testing when flag is enabled
+app.post('/api/admin/grant-dev', (req, res) => {
+  if (!ALLOW_DEV_ADMIN_FREE_ACCESS) return res.status(403).json({ error: 'Dev admin access disabled' });
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email is required' });
+  const user = mockUsers.find(u => u.email === email);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.role = 'Admin';
+  if (wssInstance) {
+    broadcast(wssInstance, {
+      type: 'BLACKBOARD_EVENT',
+      payload: {
+        eventId: `evt_admin_${Date.now()}`,
+        taskId: 'admin_grant',
+        timestamp: new Date().toISOString(),
+        sender: 'DevTool',
+        receiver: 'blackboard',
+        status: 'COMPLETED',
+        message: `Granted Admin role to ${user.email} via dev endpoint.`
+      }
+    });
+  }
+  res.json({ status: 'success', user });
+});
+
+app.post('/api/admin/revoke-dev', (req, res) => {
+  if (!ALLOW_DEV_ADMIN_FREE_ACCESS) return res.status(403).json({ error: 'Dev admin access disabled' });
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email is required' });
+  const user = mockUsers.find(u => u.email === email);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  user.role = 'User';
+  if (wssInstance) {
+    broadcast(wssInstance, {
+      type: 'BLACKBOARD_EVENT',
+      payload: {
+        eventId: `evt_admin_${Date.now()}`,
+        taskId: 'admin_revoke',
+        timestamp: new Date().toISOString(),
+        sender: 'DevTool',
+        receiver: 'blackboard',
+        status: 'COMPLETED',
+        message: `Revoked Admin role from ${user.email} via dev endpoint.`
+      }
+    });
+  }
+  res.json({ status: 'success', user });
 });
 
 app.post('/api/tickets/reply', (req, res) => {
