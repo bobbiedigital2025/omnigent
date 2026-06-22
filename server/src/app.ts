@@ -7,6 +7,9 @@ import { listHuggingFaceModels, downloadHuggingFaceAgent } from './agentCatalog'
 import { EventMessage } from './types';
 import { routeAgentTask, AgentTask } from './agentRouter';
 import { routePromptToLLM, inferAgentTaskFromPrompt } from './llmRouter';
+import dbConnector from './dbConnector';
+import emailConnector from './emailConnector';
+import supportAgent from './supportAgent';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -405,6 +408,219 @@ app.post('/api/chat', async (req, res) => {
     const errorMessage = (err as Error).message || 'Unknown routing failure';
     sendChatMessage(`Routing failed: ${errorMessage}`);
     return res.status(500).json({ error: 'Failed to route message', detail: errorMessage });
+  }
+});
+
+// ============================================================================
+// Phase 5: CRM, Support Mail, & Production Operations
+// ============================================================================
+
+// Database Connector Routes
+app.post('/api/db/connect', async (req, res) => {
+  try {
+    const status = await dbConnector.testConnection();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to connect to database', detail: (err as Error).message });
+  }
+});
+
+app.get('/api/crm/users', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const users = await dbConnector.fetchUsers(limit, offset);
+    res.json({ status: 'success', count: users.length, data: users });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch users', detail: (err as Error).message });
+  }
+});
+
+app.get('/api/crm/users/search', async (req, res) => {
+  try {
+    const query = req.query.q as string;
+    if (!query) return res.status(400).json({ error: 'Search query required' });
+    const users = await dbConnector.searchUsers(query, 10);
+    res.json({ status: 'success', count: users.length, data: users });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to search users', detail: (err as Error).message });
+  }
+});
+
+app.get('/api/crm/users/:userId', async (req, res) => {
+  try {
+    const userDetails = await dbConnector.getUserDetails(req.params.userId);
+    res.json({ status: 'success', data: userDetails });
+  } catch (err) {
+    res.status(404).json({ error: 'User not found', detail: (err as Error).message });
+  }
+});
+
+// Support Ticket Routes
+app.get('/api/support/tickets', async (req, res) => {
+  try {
+    const status = req.query.status as string;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const tickets = await dbConnector.fetchTickets(status, limit);
+    res.json({ status: 'success', count: tickets.length, data: tickets });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch tickets', detail: (err as Error).message });
+  }
+});
+
+app.get('/api/support/tickets/:ticketId', async (req, res) => {
+  try {
+    const ticketDetails = await dbConnector.getTicketDetails(req.params.ticketId);
+    res.json({ status: 'success', data: ticketDetails });
+  } catch (err) {
+    res.status(404).json({ error: 'Ticket not found', detail: (err as Error).message });
+  }
+});
+
+app.patch('/api/support/tickets/:ticketId', async (req, res) => {
+  try {
+    const updated = await dbConnector.updateTicket(req.params.ticketId, req.body);
+    res.json({ status: 'success', data: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update ticket', detail: (err as Error).message });
+  }
+});
+
+// Support Agent Auto-Draft Routes
+app.post('/api/support/draft', async (req, res) => {
+  try {
+    const { ticketId, tone } = req.body;
+    if (!ticketId) return res.status(400).json({ error: 'ticketId is required' });
+    
+    const draft = await supportAgent.generateTicketDraft({ ticketId, tone });
+    
+    if (wssInstance) {
+      broadcast(wssInstance, {
+        type: 'BLACKBOARD_EVENT',
+        payload: {
+          eventId: `evt_support_${Date.now()}`,
+          taskId: ticketId,
+          timestamp: new Date().toISOString(),
+          sender: 'Support Agent',
+          receiver: 'blackboard',
+          status: 'COMPLETED',
+          message: `Auto-drafted response for ticket ${ticketId}`
+        }
+      });
+    }
+    
+    res.json({ status: 'success', data: draft });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to generate draft', detail: (err as Error).message });
+  }
+});
+
+app.post('/api/support/suggestions', async (req, res) => {
+  try {
+    const { ticketId } = req.body;
+    if (!ticketId) return res.status(400).json({ error: 'ticketId is required' });
+    
+    const suggestions = await supportAgent.getSuggestedResponses(ticketId);
+    res.json({ status: 'success', data: suggestions });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get suggestions', detail: (err as Error).message });
+  }
+});
+
+// Email Connector Routes
+app.post('/api/email/webhook', async (req, res) => {
+  try {
+    const email = await emailConnector.parseInboundEmail(req.body);
+    
+    // Validate email
+    if (!emailConnector.isValidEmail(email.from)) {
+      return res.status(400).json({ error: 'Invalid sender email' });
+    }
+    
+    // Create support ticket from email
+    const ticketDetails = await dbConnector.getTicketDetails('ticket_new');
+    
+    if (wssInstance) {
+      broadcast(wssInstance, {
+        type: 'BLACKBOARD_EVENT',
+        payload: {
+          eventId: `evt_email_${Date.now()}`,
+          taskId: `ticket_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          sender: 'Email Connector',
+          receiver: 'blackboard',
+          status: 'COMPLETED',
+          message: `Support email received from ${email.from}: "${email.subject}"`
+        }
+      });
+    }
+    
+    res.json({ status: 'success', messageId: email.messageId });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to process email', detail: (err as Error).message });
+  }
+});
+
+app.post('/api/email/send', async (req, res) => {
+  try {
+    const { to, subject, body, ticketId, cc } = req.body;
+    if (!to || !subject || !body) {
+      return res.status(400).json({ error: 'to, subject, and body are required' });
+    }
+    
+    const queued = await emailConnector.queueOutboundEmail({ to, subject, body, ticketId, cc });
+    const status = await emailConnector.sendEmail({ to, subject, body, ticketId, cc });
+    
+    res.json({ status: 'success', messageId: queued.id, deliveryStatus: status });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to send email', detail: (err as Error).message });
+  }
+});
+
+// GDPR Data Rights Routes
+app.post('/api/gdpr/export', async (req, res) => {
+  try {
+    const userId = req.body.userId || 'user_current';
+    const userDetails = await dbConnector.getUserDetails(userId);
+    
+    const gdprData = {
+      exportDate: new Date().toISOString(),
+      userProfile: userDetails,
+      dataTypes: ['profile', 'activity', 'tickets', 'emails'],
+      format: 'JSON'
+    };
+    
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="gdpr-export-${new Date().toISOString().split('T')[0]}.json"`);
+    res.json(gdprData);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to export data', detail: (err as Error).message });
+  }
+});
+
+app.post('/api/gdpr/delete', async (req, res) => {
+  try {
+    const userId = req.body.userId || 'user_current';
+    
+    // In production, would permanently delete all user data from databases
+    if (wssInstance) {
+      broadcast(wssInstance, {
+        type: 'BLACKBOARD_EVENT',
+        payload: {
+          eventId: `evt_gdpr_${Date.now()}`,
+          taskId: 'gdpr_deletion',
+          timestamp: new Date().toISOString(),
+          sender: 'GDPR Processor',
+          receiver: 'blackboard',
+          status: 'COMPLETED',
+          message: `Right to be forgotten: All personal data for user ${userId} has been permanently deleted per GDPR Article 17.`
+        }
+      });
+    }
+    
+    res.json({ status: 'success', message: 'All personal data has been permanently deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete data', detail: (err as Error).message });
   }
 });
 

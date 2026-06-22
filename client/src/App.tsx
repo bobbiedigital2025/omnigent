@@ -8,6 +8,7 @@ import {
   Trash2, Download, X, Play, RefreshCw, CheckCircle, ShieldAlert, FileCode, Search
 } from 'lucide-react';
 import './App.css';
+import { CookieBanner, PrivacyPolicyModal, TermsOfServiceModal } from './components/ComplianceBanner';
 
 interface ChatMessage {
   id: string;
@@ -932,7 +933,7 @@ function App() {
                     <div className="section-header">
                       <div className="section-title">
                         <h3>Security & Packages Audit</h3>
-                        <p>Active firewall blocks, SSL checks, and package vulnerabilities.</p>
+                        <p>Active firewall blocks, SSL checks, package vulnerabilities, and GDPR data rights.</p>
                       </div>
                     </div>
 
@@ -948,6 +949,25 @@ function App() {
                           <CheckCircle size={18} /> 0 Vulnerabilities Detected
                         </div>
                       </div>
+                    </div>
+
+                    <div style={{ marginTop: '24px', backgroundColor: 'var(--panel-bg)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border-color)' }}>
+                      <h4 style={{ marginBottom: '16px' }}>GDPR & Data Privacy Rights</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        <button className="btn btn-secondary" onClick={() => apiPost('/api/gdpr/export')}>
+                          <Download size={14} style={{ marginRight: '6px' }} /> Export My Data
+                        </button>
+                        <button className="btn btn-secondary" onClick={() => {
+                          if (confirm('Are you sure? This action cannot be undone.')) {
+                            apiPost('/api/gdpr/delete');
+                          }
+                        }}>
+                          <Trash2 size={14} style={{ marginRight: '6px' }} /> Delete My Account
+                        </button>
+                      </div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '12px' }}>
+                        In compliance with GDPR Article 15 and CCPA Section 1798.100, you have the right to access, export, and delete your personal data.
+                      </p>
                     </div>
                   </div>
                 )}
@@ -1247,6 +1267,11 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Phase 5: Compliance & Legal Components */}
+      <CookieBanner />
+      <PrivacyPolicyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
+      <TermsOfServiceModal isOpen={showTermsModal} onClose={() => setShowTermsModal(false)} />
     </div>
   );
 }
