@@ -5,6 +5,8 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { listHuggingFaceModels, downloadHuggingFaceAgent } from './agentCatalog';
 import { EventMessage } from './types';
+import { routeAgentTask, AgentTask } from './agentRouter';
+import { routePromptToLLM, inferAgentTaskFromPrompt } from './llmRouter';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -357,32 +359,53 @@ app.post('/api/hotfix', (req, res) => {
   res.json({ status: 'initiated' });
 });
 
-app.post('/api/chat', (req, res) => {
+app.post('/api/chat', async (req, res) => {
   const { message } = req.body;
-  if (!wssInstance) return res.status(500).json({ error: 'WebSocket server not running' });
-
-  const lowercaseMsg = message.toLowerCase();
-  
-  if (lowercaseMsg.includes('scaffold') || lowercaseMsg.includes('setup') || lowercaseMsg.includes('build')) {
-    runAgentSimulation('scaffold');
-  } else if (lowercaseMsg.includes('fix') || lowercaseMsg.includes('leak') || lowercaseMsg.includes('hotfix')) {
-    runAgentSimulation('hotfix');
-  } else {
-    // General conversational mock response
-    setTimeout(() => {
-      broadcast(wssInstance!, {
-        type: 'CHAT_MESSAGE',
-        payload: {
-          id: `msg_${Math.random()}`,
-          sender: 'agent',
-          text: `I received your message: "${message}". What task would you like me to dispatch to the sub-agents? Let me know if you want to: \n- "Scaffold a landing page"\n- "Run the memory leak hotfix"\n- "Review user privacy settings"`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      });
-    }, 1500);
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'message is required' });
   }
-  
-  res.json({ status: 'received' });
+
+  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const sendChatMessage = (text: string) => {
+    if (!wssInstance) return;
+    broadcast(wssInstance, {
+      type: 'CHAT_MESSAGE',
+      payload: {
+        id: `msg_${Math.random()}`,
+        sender: 'agent',
+        text,
+        time: timestamp
+      }
+    });
+  };
+
+  const emitEvent = (event: EventMessage) => {
+    eventLogs.push(event);
+    if (wssInstance) {
+      broadcast(wssInstance, { type: 'BLACKBOARD_EVENT', payload: event });
+    }
+  };
+
+  try {
+    const routeResult = await routePromptToLLM(message);
+    const taskType = inferAgentTaskFromPrompt(message);
+
+    if (taskType) {
+      sendChatMessage(`Main Agent has routed your request and is dispatching the ${taskType} worker.`);
+      routeAgentTask({ type: taskType, payload: { taskId: `task_${Date.now()}` } }, emitEvent).catch((err) => {
+        console.error('Agent routing failed:', err);
+      });
+      sendChatMessage(routeResult.response);
+      return res.json({ status: 'received', route: routeResult, dispatched: true, taskType });
+    }
+
+    sendChatMessage(routeResult.response);
+    return res.json({ status: 'received', route: routeResult, dispatched: false });
+  } catch (err) {
+    const errorMessage = (err as Error).message || 'Unknown routing failure';
+    sendChatMessage(`Routing failed: ${errorMessage}`);
+    return res.status(500).json({ error: 'Failed to route message', detail: errorMessage });
+  }
 });
 
 export const setupWebSocketServer = (server: any): WebSocket.Server => {
