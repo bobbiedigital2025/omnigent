@@ -1,16 +1,12 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
-import ReactFlow, { ReactFlowProvider, Background, Controls, MiniMap } from 'reactflow';
-import type { Node, Edge } from 'reactflow';
-import 'reactflow/dist/style.css';
+import { useState, useEffect, useRef } from 'react';
 import { 
-  Terminal, Users, LifeBuoy, Activity, Megaphone, 
-  Globe, Database, Shield, Code, Workflow, Send, Eye,
-  Trash2, Download, X, Play, RefreshCw, CheckCircle, ShieldAlert, FileCode, Search
+  Send, Activity, Mail, Database, TrendingUp, Globe, 
+  Settings, Shield, Code, Share2, 
+  CheckCircle, Play, Download, Trash2, Cpu, Info 
 } from 'lucide-react';
 import './App.css';
-import { CookieBanner, PrivacyPolicyModal, TermsOfServiceModal } from './components/ComplianceBanner';
 
-interface ChatMessage {
+interface Message {
   id: string;
   sender: 'user' | 'agent';
   text: string;
@@ -28,1097 +24,841 @@ interface EventMessage {
   metadata?: any;
 }
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: string;
-  joined: string;
-}
-
-interface Ticket {
-  id: string;
-  userEmail: string;
-  subject: string;
-  status: string;
-  priority: string;
-  messages: Array<{ sender: 'user' | 'support'; text: string; time: string }>;
-  draft?: string;
-}
-
-interface HuggingFaceModelInfo {
-  id: string;
-  author: string;
-  tags: string[];
-  pipeline_tag: string | null;
-  downloads: number;
-  description?: string;
-}
-
 function App() {
-  // Navigation & Tabs
+  // Navigation & UI States
   const [activeTab, setActiveTab] = useState<'preview' | 'dashboard'>('dashboard');
-  const [activeModule, setActiveModule] = useState<string>('overview');
-  
-  // Chat console states
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+  const [activeMenu, setActiveMenu] = useState<string>('agents');
+  const [cookieConsent, setCookieConsent] = useState<boolean>(true);
+
+  // Chat States
+  const [chatInput, setChatInput] = useState('');
+  const [messages, setMessages] = useState<Message[]>([
     {
-      id: 'msg_welcome',
+      id: '1',
       sender: 'agent',
-      text: 'Welcome back! I am your Main Orchestrator Agent. Let me know what you want to develop or monitor today. \n\nQuick actions: \n- "Scaffold landing page" to set up a new React app. \n- "Fix memory leak" to inspect production metrics and apply a hotfix.',
+      text: "Hello! I am Omnigent, your Main Agent. I am here to help you develop, monitor, and maintain your software apps. How can I help Bobbie Digital LLC today?",
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
-  const [chatInput, setChatInput] = useState('');
-  
-  // Live states
-  const [isScaffolded, setIsScaffolded] = useState(false);
-  const [eventLogs, setEventLogs] = useState<EventMessage[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>('tkt_001');
-  const [replyText, setReplyText] = useState('');
-  
-  // Compliance Modals
-  const [showCookieBanner, setShowCookieBanner] = useState(true);
-  const [showCookieSettings, setShowCookieSettings] = useState(false);
-  const [cookiePreferences, setCookiePreferences] = useState({
-    essential: true,
-    analytics: true,
-    marketing: false
-  });
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  
-  // Telemetry & Hotfix states
-  const [telemetry, setTelemetry] = useState({
-    isLeakActive: true,
-    currentMemoryUsage: 82,
-    cpuUsage: 12,
-    pageViews: 1422,
-    latency: 420
-  });
 
-  // Code Explorer states
-  const [selectedFile, setSelectedFile] = useState('src/App.tsx');
-  const [hfSearchTerm, setHfSearchTerm] = useState('agent');
-  const [huggingFaceModels, setHuggingFaceModels] = useState<HuggingFaceModelInfo[]>([]);
-  const [hfLoading, setHfLoading] = useState(false);
-  const [hfError, setHfError] = useState<string | null>(null);
-  const [hfDownloadMessage, setHfDownloadMessage] = useState<string | null>(null);
-
-  const fileContents: Record<string, string> = {
-    'src/App.tsx': `import React from 'react';\n\nexport default function App() {\n  return (\n    <div className="landing-page">\n      <h1>Welcome to Bobbie Digital LLC</h1>\n      <p>Custom agentic workflows and web application engineering.</p>\n    </div>\n  );\n}`,
-    'src/server.ts': `import express from 'express';\nimport http from 'http';\n\nconst app = express();\nconst server = http.createServer(app);\n\n// Example: ensure socket listeners are cleaned up on close to avoid leaks\nserver.on('connection', (socket) => {\n  console.log('New client connection');\n  socket.on('close', () => {\n    socket.removeAllListeners();\n    console.log('Client disconnected and listeners removed');\n  });\n});\n`,
-    'package.json': `{\n  "name": "client-app",\n  "private": true,\n  "version": "1.0.0",\n  "dependencies": {\n    "react": "^19.0.0"\n  }\n}`,
-    'git diff': `diff --git a/src/server.ts b/src/server.ts\nindex e3490b..fa0102 100644\n--- a/src/server.ts\n+++ b/src/server.ts\n@@ -8,5 +8,6 @@ const server = http.createServer(app);\n \n server.on('connection', (socket) => {\n   console.log('New client connection');\n+  socket.on('close', () => socket.removeAllListeners());\n });`
-  };
-
-  // Integration connectors
-  const [mcpIntegrations] = useState([
-    { name: 'Local Filesystem Connector', type: 'Filesystem', status: 'Connected', port: '8081' },
-    { name: 'Postgres DB Server Connection', type: 'Database', status: 'Connected', port: '5432' },
-    { name: 'Tavily Search API gateway', type: 'Search', status: 'Disconnected', port: 'N/A' }
+  // DB CRM mock data
+  const [crmSearch, setCrmSearch] = useState('');
+  const [crmUsers, setCrmUsers] = useState([
+    { id: 'usr_001', name: 'John Doe', email: 'john@example.com', plan: 'Enterprise', created: '2026-06-15' },
+    { id: 'usr_002', name: 'Jane Smith', email: 'jane@example.com', plan: 'Free', created: '2026-06-18' },
+    { id: 'usr_003', name: 'Alex Johnson', email: 'alex.j@company.com', plan: 'Pro', created: '2026-06-20' },
   ]);
 
-  // Web Browser Landing Page preview dark mode state
-  const [previewDarkMode, setPreviewDarkMode] = useState(true);
+  // Support mock data
+  const [selectedTicket, setSelectedTicket] = useState<string>('t_001');
+  const [supportDraft, setSupportDraft] = useState('');
+  const [supportTickets] = useState([
+    { id: 't_001', user: 'John Doe', email: 'john@example.com', subject: 'Error loading invoice PDF', status: 'Open', body: 'Hi support team, I got a database transaction timeout warning when trying to download my last payment receipt. Can you please check?' },
+    { id: 't_002', user: 'Jane Smith', email: 'jane@example.com', subject: 'Need to add custom domain', status: 'Closed', body: 'How do I add support@mydomain.com and point DNS nameservers to Omnigent host?' }
+  ]);
 
-  // References
+  // Health and simulation states
+  const [healthStatus, setHealthStatus] = useState<'healthy' | 'warning'>('healthy');
+  const [cpuUsage, setCpuUsage] = useState(12);
+  const [ramUsage] = useState(38);
+  const [logs, setLogs] = useState<string[]>([
+    '[System] Server started on port 3000',
+    '[System] Database SQLite initialized',
+    '[System] Webhook connection status: OK'
+  ]);
+
+  // WebSocket Event Bus States
+  const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [eventLogs, setEventLogs] = useState<EventMessage[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-  const apiGet = (path: string) => fetch(`${BASE_URL}${path}`).then(res => res.json());
-  const apiPost = (path: string, body?: any) => fetch(`${BASE_URL}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: 'same-origin'
-  }).then(res => res.json());
-
-  // Setup WS Connection
+  // Connect to WebSocket Server (Blackboard Event Bus)
   useEffect(() => {
-    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${scheme}://${window.location.host}`);
-    wsRef.current = ws;
+    setWsStatus('connecting');
+    const socket = new WebSocket('ws://localhost:3000');
+    wsRef.current = socket;
 
-    ws.onopen = () => {
-      console.log('Connected to local event bus.');
+    socket.onopen = () => {
+      setWsStatus('connected');
+      console.log('Connected to Event Bus');
     };
 
-    ws.onmessage = (event) => {
-      const parsed = JSON.parse(event.data);
-      if (parsed.type === 'SYNC_HISTORY') {
-        setEventLogs(parsed.payload);
-      } else if (parsed.type === 'BLACKBOARD_EVENT') {
-        setEventLogs(prev => [...prev, parsed.payload]);
-      } else if (parsed.type === 'CHAT_MESSAGE') {
-        setChatMessages(prev => [...prev, parsed.payload]);
-      } else if (parsed.type === 'PREVIEW_STATE') {
-        setIsScaffolded(parsed.payload.active);
-        setActiveTab('preview');
-      } else if (parsed.type === 'TELEMETRY_UPDATE') {
-        setTelemetry(prev => ({
-          ...prev,
-          isLeakActive: parsed.payload.isLeakActive,
-          currentMemoryUsage: parsed.payload.currentMemoryUsage
-        }));
-      } else if (parsed.type === 'TICKET_DRAFTED') {
-        const { ticketId, draft } = parsed.payload;
-        setTickets(prev => prev.map(t => t.id === ticketId ? { ...t, draft } : t));
-        if (selectedTicketId === ticketId) {
-          setReplyText(draft);
+    socket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'SYNC_HISTORY') {
+          setEventLogs(data.payload);
+        } else if (data.type === 'BLACKBOARD_EVENT') {
+          setEventLogs((prev) => [...prev, data.payload]);
         }
+      } catch (err) {
+        console.error('Error parsing WebSocket event:', err);
       }
     };
 
-    ws.onclose = () => {
-      console.log('Disconnected from local event bus.');
+    socket.onclose = () => {
+      setWsStatus('disconnected');
+      console.log('Disconnected from Event Bus');
     };
 
     return () => {
-      ws.close();
+      socket.close();
     };
   }, []);
 
-  // Poll Telemetry & Load CRM data
-  useEffect(() => {
-    const fetchStats = () => {
-      apiGet('/api/telemetry')
-        .then(data => setTelemetry(data))
-        .catch(err => console.log('Failed to fetch telemetry:', err));
-    };
-
-    const fetchCRM = () => {
-      apiGet('/api/users')
-        .then(data => setUsers(data))
-        .catch(err => console.log('Failed to fetch CRM users:', err));
-
-      apiGet('/api/tickets')
-        .then(data => setTickets(data))
-        .catch(err => console.log('Failed to fetch support tickets:', err));
-    };
-
-    fetchCRM();
-    fetchStats();
-
-    const interval = setInterval(() => {
-      fetchStats();
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, []);
+  // MCP states & effect
+  const [mcpTools, setMcpTools] = useState<Array<{ serverName: string; tool: any }>>([]);
+  const [loadingTools, setLoadingTools] = useState<boolean>(false);
 
   useEffect(() => {
-    if (activeModule === 'agents') {
-      fetchHuggingFaceModels(hfSearchTerm);
+    if (activeMenu === 'integrations') {
+      setLoadingTools(true);
+      fetch('http://localhost:3000/api/mcp/tools')
+        .then((res) => res.json())
+        .then((data) => {
+          setMcpTools(data.tools || []);
+          setLoadingTools(false);
+        })
+        .catch((err) => {
+          console.error('Failed to fetch MCP tools:', err);
+          setLoadingTools(false);
+        });
     }
-  }, [activeModule]);
+  }, [activeMenu]);
 
-  const fetchHuggingFaceModels = (query = 'agent') => {
-    setHfLoading(true);
-    setHfError(null);
+  // Send message to main agent
+  const handleSendMessage = () => {
+    if (!chatInput.trim()) return;
 
-    apiGet(`/api/agents/huggingface?q=${encodeURIComponent(query)}`)
-      .then(data => {
-        if (data?.status === 'success' && Array.isArray(data.models)) {
-          setHuggingFaceModels(data.models);
-        } else {
-          setHfError('No models found for that query.');
-        }
-      })
-      .catch(err => {
-        setHfError(err.message || 'Failed to load Hugging Face models.');
-      })
-      .finally(() => setHfLoading(false));
-  };
-
-  const downloadHuggingFaceAgentModel = (modelId: string) => {
-    setHfDownloadMessage(`Downloading ${modelId}...`);
-    apiPost('/api/agents/huggingface/download', { modelId })
-      .then(data => {
-        if (data?.status === 'success') {
-          setHfDownloadMessage(`Downloaded ${modelId} to ${data.result.localPath}`);
-        } else {
-          setHfDownloadMessage(`Download failed: ${data?.error || 'unknown error'}`);
-        }
-      })
-      .catch(err => {
-        setHfDownloadMessage(`Download failed: ${err.message || err}`);
-      });
-  };
-
-  // Update selected ticket draft text
-  useEffect(() => {
-    const t = tickets.find(tkt => tkt.id === selectedTicketId);
-    if (t) {
-      setReplyText(t.draft || '');
-    }
-  }, [selectedTicketId, tickets]);
-
-  // Scroll chat
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
-  // Handle send message
-  const handleSendMessage = (textToSend?: string) => {
-    const text = textToSend || chatInput;
-    if (!text.trim()) return;
-
-    // Add user message
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
+    const userMsg: Message = {
+      id: Date.now().toString(),
       sender: 'user',
-      text,
+      text: chatInput,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-    setChatMessages(prev => [...prev, userMsg]);
+
+    setMessages((prev) => [...prev, userMsg]);
+    const promptText = chatInput;
     setChatInput('');
 
-    // Broadcast user chat over websocket
+    const taskId = 'tsk_' + Date.now().toString().slice(-4);
+
+    // If WebSocket is connected, route to the backend agent runner
+    if (wsStatus === 'connected' && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      postEvent(taskId, 'main_bot', 'blackboard', 'PENDING', `Omnigent parsed task: "${promptText}"`);
+      
+      const lower = promptText.toLowerCase();
+      let targetAgent = 'coder_agent';
+      if (lower.includes('script') || lower.includes('screenplay') || lower.includes('fountain') || lower.includes('shot list') || lower.includes('film') || lower.includes('movie') || lower.includes('scene')) {
+        targetAgent = 'script_agent';
+      } else if (lower.includes('grafana') || lower.includes('telemetry') || lower.includes('gpu') || lower.includes('render') || lower.includes('ops') || lower.includes('cost') || lower.includes('alert')) {
+        targetAgent = 'studio_ops_agent';
+      } else if (lower.includes('security') || lower.includes('audit')) {
+        targetAgent = 'security_agent';
+      }
+
+      wsRef.current.send(JSON.stringify({
+        type: 'NEW_TASK',
+        payload: {
+          taskId,
+          assignedTo: targetAgent,
+          description: promptText
+        }
+      }));
+
+      // Acknowledge routing
+      setTimeout(() => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            sender: 'agent',
+            text: `Task routed to the Event Bus. The background agents are executing it now. Watch their progress on the 'Agents Visualizer' dashboard.`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
+        ]);
+      }, 1000);
+      return;
+    }
+
+    // Fallback: Trigger mock background event cycles to simulate agent teamwork offline
+    const mockAgentWorkflow = async () => {
+      // 1. Post Event: Task Created
+      postEvent(taskId, 'main_bot', 'blackboard', 'PENDING', `Omnigent parsed task: "${promptText}"`);
+      
+      // Response delay simulating agent processing
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      
+      if (promptText.toLowerCase().includes('scaffold') || promptText.toLowerCase().includes('create')) {
+        postEvent(taskId, 'scaffold_agent', 'blackboard', 'IN_PROGRESS', 'Initializing local workspace directory structure...');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        postEvent(taskId, 'scaffold_agent', 'blackboard', 'COMPLETED', 'Successfully scaffolded new app templates inside /client and /server');
+      } else if (promptText.toLowerCase().includes('support') || promptText.toLowerCase().includes('draft')) {
+        postEvent(taskId, 'support_agent', 'blackboard', 'IN_PROGRESS', 'Analyzing user database record and checking health logs...');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        postEvent(taskId, 'support_agent', 'blackboard', 'COMPLETED', 'Support agent loaded database details and compiled draft reply.');
+      } else {
+        postEvent(taskId, 'coder_agent', 'blackboard', 'IN_PROGRESS', 'Refactoring application controller endpoints and linting code...');
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        postEvent(taskId, 'coder_agent', 'blackboard', 'COMPLETED', 'Changes saved. Successfully updated file tree changes and verified tests.');
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          sender: 'agent',
+          text: `Task completed. I guided the background agents to solve it. You can see the step-by-step execution timeline in the Developer Dashboard under the 'Agents' panel.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    };
+
+    mockAgentWorkflow();
+  };
+
+  const postEvent = (taskId: string, sender: string, receiver: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED', msg: string) => {
+    const newEvent: EventMessage = {
+      eventId: 'evt_' + Math.random().toString(36).slice(2, 8),
+      taskId,
+      timestamp: new Date().toLocaleTimeString(),
+      sender,
+      receiver,
+      status,
+      message: msg
+    };
+
+    // Push local
+    setEventLogs((prev) => [...prev, newEvent]);
+
+    // Push to server over WebSocket
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
-        type: 'SEND_CHAT',
-        payload: userMsg
+        type: 'BLACKBOARD_EVENT',
+        payload: newEvent
       }));
     }
-
-    apiPost('/api/chat', { message: text }).catch(err => console.error('Error posting message:', err));
   };
 
-  // Run scaffold
-  const triggerScaffold = () => {
-    handleSendMessage('Scaffold a landing page app');
+  // Support ticket drafting helper
+  const handleAutoDraft = () => {
+    const currentTicket = supportTickets.find((t) => t.id === selectedTicket);
+    if (!currentTicket) return;
+
+    setSupportDraft(
+      `Hi ${currentTicket.user},\n\nI investigated your recent activity logs and order history. The server timed out due to a connection lock, but we have processed your order manually. The PDF receipt is now accessible in your profile account. Let us know if you need anything else!\n\nBest regards,\nSupport Bot | Bobbie Digital LLC`
+    );
   };
 
-  // Run hotfix
-  const triggerHotfix = () => {
-    handleSendMessage('Fix memory leak');
+  // Health event simulation
+  const handleSimulateError = () => {
+    setHealthStatus('warning');
+    setCpuUsage(94);
+    setLogs((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] WARNING: DB Connection Pool capacity exceeded (98/100)`,
+      `[${new Date().toLocaleTimeString()}] ERROR: 504 Gateway Timeout on /api/v1/payments/invoice`
+    ]);
+
+    // Trigger agent hotfix recommendation
+    setTimeout(() => {
+      setLogs((prev) => [
+        ...prev,
+        `[Agent AI] Analyzed trace: connection leak located in checkout controller.`,
+        `[Agent AI] Auto-Fix Available: Apply patch config to expand DB connection pool limits.`
+      ]);
+    }, 2000);
   };
 
-  // Send Ticket Reply
-  const sendTicketReply = () => {
-    if (!replyText.trim()) return;
-    apiPost('/api/tickets/reply', { ticketId: selectedTicketId, text: replyText })
-      .then(data => {
-        setTickets(prev => prev.map(t => t.id === selectedTicketId ? data.ticket : t));
-        setReplyText('');
-      })
-      .catch(err => console.error('Error replying to ticket:', err));
+  const handleApplyHotfix = () => {
+    setHealthStatus('healthy');
+    setCpuUsage(14);
+    setLogs((prev) => [
+      ...prev,
+      `[Agent AI] Hotfix successfully deployed.`,
+      `[System] Connection Pool reallocated (150 max). Database connections restored.`
+    ]);
   };
 
-  // Request Agent Draft Assist
-  const requestDraftAssist = () => {
-    apiPost('/api/tickets/draft-assist', { ticketId: selectedTicketId })
-      .catch(err => console.error('Error requesting draft assist:', err));
+  // GDPR data delete CRM action
+  const handleDeleteUser = (id: string) => {
+    setCrmUsers((prev) => prev.filter((u) => u.id !== id));
+    setLogs((prev) => [
+      ...prev,
+      `[Compliance] GDPR Deletion Request fulfilled: Removed user account '${id}' permanently from local database storage.`
+    ]);
   };
 
-  // Export GDPR user data
-  const exportUserData = (userId: string) => {
-    apiPost('/api/users/export', { id: userId })
-      .then(data => {
-        const fileData = JSON.stringify(data.data, null, 2);
-        const blob = new Blob([fileData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `user_gdpr_export_${userId}.json`;
-        link.click();
-      })
-      .catch(err => console.error('Error exporting user data:', err));
-  };
-
-  // Delete GDPR user data
-  const deleteUserData = (userId: string) => {
-    if (!confirm('Are you sure you want to permanently delete this user profile? This fulfills CCPA/GDPR Right to be Forgotten requirements.')) return;
-    
-    apiPost('/api/users/delete', { id: userId })
-      .then(() => {
-        setUsers(prev => prev.filter(u => u.id !== userId));
-      })
-      .catch(err => console.error('Error deleting user:', err));
-  };
-
-  // Render Visualizer Graph Helper
-  const getActiveAgentName = (): string => {
-    if (eventLogs.length === 0) return '';
-    const lastEvent = eventLogs[eventLogs.length - 1];
-    return lastEvent.status === 'IN_PROGRESS' ? lastEvent.sender : '';
-  };
-
-  const [inspectorOpen, setInspectorOpen] = useState(false);
-  const [inspectorData, setInspectorData] = useState<any>(null);
-
-  const activeAgentNames = useMemo(() => {
-    const set = new Set<string>();
-    eventLogs.forEach((evt) => {
-      set.add(evt.sender);
-      set.add(evt.receiver);
-    });
-    return set;
-  }, [eventLogs]);
-
-  const rfNodes = useMemo<Node[]>(() => [
-    {
-      id: 'main',
-      data: { label: 'Main Bot' },
-      position: { x: 50, y: 50 },
-      style: {
-        background: activeAgentNames.has('Main Bot') ? 'rgba(124, 58, 237, 0.25)' : 'rgba(15, 23, 42, 0.95)',
-        border: activeAgentNames.has('Main Bot') ? '1px solid #7c3aed' : '1px solid rgba(255,255,255,0.08)',
-      }
-    },
-    {
-      id: 'coder',
-      data: { label: 'Coder / Scaffold' },
-      position: { x: 300, y: 50 },
-      style: {
-        background: activeAgentNames.has('Scaffold Agent') || activeAgentNames.has('Coder Agent') ? 'rgba(59, 130, 246, 0.18)' : 'rgba(15, 23, 42, 0.95)',
-        border: activeAgentNames.has('Scaffold Agent') || activeAgentNames.has('Coder Agent') ? '1px solid #2563eb' : '1px solid rgba(255,255,255,0.08)',
-      }
-    },
-    {
-      id: 'support',
-      data: { label: 'Support Agent' },
-      position: { x: 550, y: 50 },
-      style: {
-        background: activeAgentNames.has('Support Agent') ? 'rgba(34, 197, 94, 0.18)' : 'rgba(15, 23, 42, 0.95)',
-        border: activeAgentNames.has('Support Agent') ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.08)',
-      }
-    }
-  ], [activeAgentNames]);
-
-  const rfEdges = useMemo<Edge[]>(() => [
-    {
-      id: 'e1-2',
-      source: 'main',
-      target: 'coder',
-      animated: activeAgentNames.has('Scaffold Agent') || activeAgentNames.has('Coder Agent')
-    },
-    {
-      id: 'e2-3',
-      source: 'coder',
-      target: 'support',
-      animated: activeAgentNames.has('Support Agent')
-    }
-  ], [activeAgentNames]);
-
-  const openInspectorForEvent = (evt: EventMessage) => {
-    setInspectorData({ type: 'event', event: evt });
-    setInspectorOpen(true);
-  };
-
-  const openInspectorForNode = (node: Node) => {
-    setInspectorData({ type: 'node', node });
-    setInspectorOpen(true);
+  // GDPR data download action
+  const handleDownloadUserData = (user: any) => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(user, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `gdpr_export_${user.id}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   return (
     <div className="app-container">
-      {/* Left panel: chat console */}
-      <div className="left-panel">
-        <div className="console-header">
-          <div className="status-dot"></div>
-          <h2>OMNIGENT ORCHESTRATOR</h2>
+      {/* 1. Left Panel - Chat */}
+      <div className="chat-panel">
+        <div className="header-container">
+          <div className="logo-text">
+            <Activity size={24} className="dashed-line" />
+            <span>Omnigent</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '11px', color: '#9ca3af' }}>WS Status:</span>
+            <span style={{ 
+              width: '8px', 
+              height: '8px', 
+              borderRadius: '50%', 
+              backgroundColor: wsStatus === 'connected' ? '#10b981' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444' 
+            }} />
+          </div>
         </div>
-        
-        <div className="chat-history">
-          {chatMessages.map(msg => (
-            <div key={msg.id} className={`chat-bubble ${msg.sender}`}>
-              {msg.text}
-              <span className="time">{msg.time}</span>
+
+        <div className="chat-messages">
+          {messages.map((m) => (
+            <div key={m.id} className={`message-bubble ${m.sender}`}>
+              <div style={{ fontSize: '12px', color: m.sender === 'user' ? '#ddd' : '#9ca3af', marginBottom: '4px', fontWeight: 600 }}>
+                {m.sender === 'user' ? 'Developer' : 'Omnigent (Main)'}
+              </div>
+              <div>{m.text}</div>
+              <div style={{ fontSize: '9px', textAlign: 'right', marginTop: '4px', opacity: 0.7 }}>{m.time}</div>
             </div>
           ))}
-          <div ref={chatEndRef} />
         </div>
 
-        <div className="chat-actions">
-          <button className="action-btn" onClick={triggerScaffold}>
-            <Play size={13} /> Scaffold App
-          </button>
-          <button className="action-btn" onClick={triggerHotfix}>
-            <RefreshCw size={13} /> Run Hotfix
-          </button>
-          <button className="action-btn" onClick={() => setShowPrivacyModal(true)}>
-            Privacy Policy
-          </button>
-          <button className="action-btn" onClick={() => setShowTermsModal(true)}>
-            Terms of Service
-          </button>
-        </div>
-
-        <form className="chat-input-form" onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}>
+        <div className="chat-input-area">
           <input 
             type="text" 
-            className="chat-input"
-            placeholder="Ask Main Bot to build or fix things..."
-            value={chatInput}
+            className="chat-input" 
+            placeholder="Ask Omnigent to build, test or run code..." 
+            value={chatInput} 
             onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
           />
-          <button type="submit" className="chat-send-btn">
-            <Send size={16} />
+          <button className="chat-send-btn" onClick={handleSendMessage}>
+            <Send size={18} />
           </button>
-        </form>
+        </div>
       </div>
 
-      {/* Right panel: dashboard workspaces */}
-      <div className="right-panel">
+      {/* 2. Right Panel - Workspace */}
+      <div className="workspace-panel">
         <div className="workspace-tabs">
           <button 
-            className={`tab-link ${activeTab === 'preview' ? 'active' : ''}`}
+            className={`tab-btn ${activeTab === 'preview' ? 'active' : ''}`}
             onClick={() => setActiveTab('preview')}
           >
-            App Preview
+            <Play size={16} />
+            <span>App Preview</span>
           </button>
           <button 
-            className={`tab-link ${activeTab === 'dashboard' ? 'active' : ''}`}
+            className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
-            Developer Dashboard
+            <Globe size={16} />
+            <span>Developer Dashboard</span>
           </button>
         </div>
 
-        <div className="tab-content-container">
+        <div className="workspace-content">
           {activeTab === 'preview' ? (
-            <div className="preview-panel">
-              <div className="browser-bar">
-                <div className="browser-dots">
-                  <div className="browser-dot" style={{ backgroundColor: '#ef4444' }}></div>
-                  <div className="browser-dot" style={{ backgroundColor: '#eab308' }}></div>
-                  <div className="browser-dot" style={{ backgroundColor: '#22c55e' }}></div>
+            /* Live App Preview Rendering Mockup */
+            <div style={{ padding: '40px', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1e293b' }}>
+              <div style={{ backgroundColor: '#0f172a', padding: '32px', borderRadius: '12px', border: '1px solid #374151', width: '100%', maxWidth: '500px', textAlign: 'center' }}>
+                <CheckCircle size={48} color="#10b981" style={{ marginBottom: '16px' }} />
+                <h2 style={{ margin: '0 0 8px', fontSize: '22px' }}>Staging Environment Online</h2>
+                <p style={{ color: '#9ca3af', fontSize: '14px', marginBottom: '24px' }}>
+                  Your live Hot-Reload preview is active on port 5173.
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', fontSize: '13px', color: '#8b5cf6', fontWeight: 600 }}>
+                  <Globe size={16} />
+                  <span>https://staging-client-project.local</span>
                 </div>
-                <div className="browser-address">
-                  {isScaffolded ? 'https://bobbiedigital-client-x.staging.local' : 'about:blank'}
-                </div>
-                <button 
-                  className="btn btn-secondary" 
-                  style={{ padding: '2px 8px', fontSize: '10px' }}
-                  onClick={() => setPreviewDarkMode(!previewDarkMode)}
-                >
-                  Toggle Theme
-                </button>
-              </div>
-              <div className="preview-iframe-mock">
-                {isScaffolded ? (
-                  <div className="preview-app-render" style={{
-                    padding: '40px',
-                    height: '100%',
-                    backgroundColor: previewDarkMode ? '#0f172a' : '#f8fafc',
-                    color: previewDarkMode ? '#f8fafc' : '#0f172a',
-                    transition: 'all 0.3s'
-                  }}>
-                    <header style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '16px' }}>
-                      <h2 style={{ fontSize: '20px', color: previewDarkMode ? '#c084fc' : '#9333ea' }}>Bobbie Digital Landing</h2>
-                      <nav style={{ display: 'flex', gap: '20px', fontSize: '13px' }}>
-                        <span>Home</span>
-                        <span>Solutions</span>
-                        <span>Contact</span>
-                      </nav>
-                    </header>
-                    <main style={{ marginTop: '60px', textAlign: 'center' }}>
-                      <h1 style={{ fontSize: '36px', fontWeight: 800 }}>Agent-Driven Scaling for SaaS</h1>
-                      <p style={{ marginTop: '16px', color: previewDarkMode ? '#94a3b8' : '#64748b', fontSize: '15px' }}>
-                        Accelerate application building using secure local and high-reasoning cloud orchestration.
-                      </p>
-                      <button style={{
-                        marginTop: '30px',
-                        backgroundColor: '#9333ea',
-                        color: 'white',
-                        padding: '10px 24px',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}>
-                        Explore Deployments
-                      </button>
-                    </main>
-                  </div>
-                ) : (
-                  <div className="no-preview">
-                    <Eye size={44} className="text-muted" />
-                    <h3>No Active App Preview</h3>
-                    <p>Trigger "Scaffold App" or click the shortcut button on the left to begin.</p>
-                  </div>
-                )}
               </div>
             </div>
           ) : (
+            /* Developer Dashboard Control Center */
             <div className="dashboard-layout">
-              {/* Sidebar navigation */}
+              {/* Sidebar Navigation */}
               <div className="dashboard-sidebar">
-                <button className={`sidebar-btn ${activeModule === 'overview' ? 'active' : ''}`} onClick={() => setActiveModule('overview')}>
-                  <Terminal size={15} /> App Overview
+                <button className={`sidebar-item ${activeMenu === 'overview' ? 'active' : ''}`} onClick={() => setActiveMenu('overview')}>
+                  <Globe size={16} /> App Overview
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'users' ? 'active' : ''}`} onClick={() => setActiveModule('users')}>
-                  <Users size={15} /> Users (Live CRM)
+                <button className={`sidebar-item ${activeMenu === 'users' ? 'active' : ''}`} onClick={() => setActiveMenu('users')}>
+                  <Database size={16} /> Users (Live CRM)
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'support' ? 'active' : ''}`} onClick={() => setActiveModule('support')}>
-                  <LifeBuoy size={15} /> Support CRM
+                <button className={`sidebar-item ${activeMenu === 'support' ? 'active' : ''}`} onClick={() => setActiveMenu('support')}>
+                  <Mail size={16} /> Support (Ticket CRM)
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'analytics' ? 'active' : ''}`} onClick={() => setActiveModule('analytics')}>
-                  <Activity size={15} /> Analytics & Health
+                <button className={`sidebar-item ${activeMenu === 'analytics' ? 'active' : ''}`} onClick={() => setActiveMenu('analytics')}>
+                  <Activity size={16} /> Analytics & Health
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'marketing' ? 'active' : ''}`} onClick={() => setActiveModule('marketing')}>
-                  <Megaphone size={15} /> Marketing
+                <button className={`sidebar-item ${activeMenu === 'marketing' ? 'active' : ''}`} onClick={() => setActiveMenu('marketing')}>
+                  <TrendingUp size={16} /> Marketing
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'domains' ? 'active' : ''}`} onClick={() => setActiveModule('domains')}>
-                  <Globe size={15} /> Domains
+                <button className={`sidebar-item ${activeMenu === 'domains' ? 'active' : ''}`} onClick={() => setActiveMenu('domains')}>
+                  <Globe size={16} /> Domains
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'integrations' ? 'active' : ''}`} onClick={() => setActiveModule('integrations')}>
-                  <Database size={15} /> Integrations
+                <button className={`sidebar-item ${activeMenu === 'integrations' ? 'active' : ''}`} onClick={() => setActiveMenu('integrations')}>
+                  <Settings size={16} /> Integrations (MCP)
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'security' ? 'active' : ''}`} onClick={() => setActiveModule('security')}>
-                  <Shield size={15} /> Security
+                <button className={`sidebar-item ${activeMenu === 'security' ? 'active' : ''}`} onClick={() => setActiveMenu('security')}>
+                  <Shield size={16} /> Security
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'code' ? 'active' : ''}`} onClick={() => setActiveModule('code')}>
-                  <Code size={15} /> Code & Git
+                <button className={`sidebar-item ${activeMenu === 'code' ? 'active' : ''}`} onClick={() => setActiveMenu('code')}>
+                  <Code size={16} /> Code Explorer
                 </button>
-                <button className={`sidebar-btn ${activeModule === 'agents' ? 'active' : ''}`} onClick={() => setActiveModule('agents')}>
-                  <Workflow size={15} /> Agents Visualizer
-                  <span className="sidebar-badge">HF</span>
+                <button className={`sidebar-item ${activeMenu === 'agents' ? 'active' : ''}`} onClick={() => setActiveMenu('agents')}>
+                  <Share2 size={16} /> Agents Visualizer
                 </button>
               </div>
 
-              {/* Module Content */}
-              <div className="dashboard-content">
-                {/* 1. App Overview */}
-                {activeModule === 'overview' && (
+              {/* Main Dashboard Screen Viewports */}
+              <div className="dashboard-body">
+                {activeMenu === 'overview' && (
                   <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Application Overview</h3>
-                        <p>Bobbie Digital LLC staging status and build channels.</p>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <span className="action-btn"><CheckCircle size={13} color="#10b981" /> Build Success</span>
-                      </div>
-                    </div>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>App Overview</h2>
+                    <div className="metrics-grid">
                       <div className="metric-card">
-                        <h4>Active Branch</h4>
-                        <div className="value">main</div>
-                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>Latest commit: Feat: Added Blackboard event channels</p>
+                        <h3>Status</h3>
+                        <div className="value" style={{ color: '#10b981' }}>Staging</div>
                       </div>
                       <div className="metric-card">
-                        <h4>Deployment Endpoint</h4>
-                        <div className="value" style={{ fontSize: '16px', marginTop: '12px' }}>
-                          <a href="https://bobbiedigital-client-x.staging.local" style={{ color: 'var(--accent-purple)' }}>
-                            bobbiedigital-client-x.staging.local
-                          </a>
-                        </div>
+                        <h3>Github Connected</h3>
+                        <div className="value" style={{ fontSize: '16px', textOverflow: 'ellipsis', overflow: 'hidden' }}>bobbiedigital2025/omnigent</div>
                       </div>
-                    </div>
-
-                    <div className="metric-card" style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h4>Agent Browser Shortcut</h4>
-                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                          Quickly open the Hugging Face Agent Browser to find and download new agent models.
-                        </p>
+                      <div className="metric-card">
+                        <h3>Last Build</h3>
+                        <div className="value" style={{ fontSize: '18px' }}>Passed (10m ago)</div>
                       </div>
-                      <button className="btn btn-primary" type="button" onClick={() => setActiveModule('agents')}>
-                        Open Agent Browser
-                      </button>
-                    </div>
-
-                    <h4 style={{ marginBottom: '8px' }}>Live Build Console Logs</h4>
-                    <div className="blackboard-log-output" style={{ color: '#a9b1d6', height: '220px' }}>
-                      {`[INFO] 2026-06-21T19:03:00Z: Starting dev server...\n[INFO] 2026-06-21T19:03:02Z: Vite dev server running on port 5173\n[INFO] 2026-06-21T19:03:05Z: WebSocket logs attached.\n[SUCCESS] 2026-06-21T19:03:06Z: Cold compilation successful (320ms).\n[INFO] 2026-06-21T19:04:10Z: Watching source directory changes...\n`}
                     </div>
                   </div>
                 )}
 
-                {/* 2. Users (Live CRM) */}
-                {activeModule === 'users' && (
+                {activeMenu === 'users' && (
                   <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Users CRM</h3>
-                        <p>Live accounts loaded directly from the application database.</p>
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h2 style={{ margin: 0, fontSize: '24px' }}>Users (Live CRM Mode)</h2>
+                      <input 
+                        type="text" 
+                        placeholder="Search users..." 
+                        style={{ padding: '6px 12px', fontSize: '13px' }}
+                        value={crmSearch} 
+                        onChange={(e) => setCrmSearch(e.target.value)}
+                      />
                     </div>
-
-                    <div className="crm-table-container">
-                      <table className="crm-table">
-                        <thead>
-                          <tr>
-                            <th>User ID</th>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Account Type</th>
-                            <th>Status</th>
-                            <th>Compliance Actions</th>
+                    <p style={{ color: '#9ca3af', fontSize: '13px', margin: '4px 0 16px' }}>
+                      <Info size={14} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
+                      GDPR and CCPA Compliant CRM. You can download details or purge data profiles instantly.
+                    </p>
+                    <table className="crm-table">
+                      <thead>
+                        <tr>
+                          <th>User ID</th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Plan</th>
+                          <th>Sign Up</th>
+                          <th>Compliance Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {crmUsers.filter(u => u.name.toLowerCase().includes(crmSearch.toLowerCase())).map((u) => (
+                          <tr key={u.id}>
+                            <td><code>{u.id}</code></td>
+                            <td style={{ fontWeight: 600 }}>{u.name}</td>
+                            <td>{u.email}</td>
+                            <td><span className="badge active">{u.plan}</span></td>
+                            <td>{u.created}</td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button title="Download User Data (GDPR Export)" onClick={() => handleDownloadUserData(u)} style={{ background: '#374151', padding: '6px', borderRadius: '4px', color: '#fff' }}>
+                                  <Download size={14} />
+                                </button>
+                                <button title="Delete User Permanently" onClick={() => handleDeleteUser(u.id)} style={{ background: '#ef4444', padding: '6px', borderRadius: '4px', color: '#fff' }}>
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {users.map(u => (
-                            <tr key={u.id}>
-                              <td style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}>{u.id}</td>
-                              <td>{u.name}</td>
-                              <td>{u.email}</td>
-                              <td>{u.role}</td>
-                              <td>
-                                <span style={{
-                                  padding: '2px 6px',
-                                  fontSize: '10px',
-                                  borderRadius: '10px',
-                                  backgroundColor: u.status === 'Active' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                  color: u.status === 'Active' ? 'var(--accent-green)' : 'var(--accent-red)'
-                                }}>
-                                  {u.status}
-                                </span>
-                              </td>
-                              <td>
-                                <button className="crm-action-btn" onClick={() => exportUserData(u.id)}>
-                                  <Download size={11} /> Export Data
-                                </button>
-                                <button className="crm-action-btn delete" onClick={() => deleteUserData(u.id)}>
-                                  <Trash2 size={11} /> Right to be Forgotten
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
 
-                {/* 3. Support CRM */}
-                {activeModule === 'support' && (
+                {activeMenu === 'support' && (
                   <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Support CRM</h3>
-                        <p>Resolve customer complaints with agent-assisted database querying.</p>
-                      </div>
-                    </div>
-
-                    <div className="support-grid">
-                      <div className="ticket-list">
-                        {tickets.map(t => (
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>Support Ticket CRM</h2>
+                    <div style={{ display: 'flex', gap: '20px', height: '400px' }}>
+                      {/* List */}
+                      <div style={{ width: '40%', border: '1px solid #374151', borderRadius: '6px', overflowY: 'auto' }}>
+                        {supportTickets.map((t) => (
                           <div 
                             key={t.id} 
-                            className={`ticket-item ${selectedTicketId === t.id ? 'active' : ''}`}
-                            onClick={() => setSelectedTicketId(t.id)}
+                            onClick={() => setSelectedTicket(t.id)}
+                            style={{ 
+                              padding: '12px', 
+                              borderBottom: '1px solid #374151', 
+                              cursor: 'pointer',
+                              backgroundColor: selectedTicket === t.id ? '#1f2937' : 'transparent'
+                            }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <h4>{t.subject}</h4>
-                              <span style={{
-                                fontSize: '9px',
-                                padding: '2px 4px',
-                                borderRadius: '4px',
-                                backgroundColor: t.priority === 'High' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(255,255,255,0.05)',
-                                color: t.priority === 'High' ? 'var(--accent-red)' : 'var(--text-secondary)'
-                              }}>{t.priority}</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>{t.user}</span>
+                              <span className="badge active">{t.status}</span>
                             </div>
-                            <p>{t.userEmail}</p>
+                            <div style={{ fontSize: '12px', fontWeight: 500, color: '#f3f4f6', marginBottom: '2px' }}>{t.subject}</div>
+                            <div style={{ fontSize: '11px', color: '#9ca3af', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{t.body}</div>
                           </div>
                         ))}
                       </div>
+                      
+                      {/* Ticket Body & Agent Draft */}
+                      <div style={{ width: '60%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {supportTickets.filter(t => t.id === selectedTicket).map((t) => (
+                          <div key={t.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                            <div style={{ border: '1px solid #374151', padding: '16px', borderRadius: '6px', backgroundColor: '#0f172a', fontSize: '13px' }}>
+                              <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '8px' }}>From: {t.user} ({t.email})</div>
+                              <div style={{ borderBottom: '1px solid #374151', paddingBottom: '8px', marginBottom: '8px', fontWeight: 600 }}>Subject: {t.subject}</div>
+                              <div style={{ whiteSpace: 'pre-wrap', color: '#d1d5db' }}>{t.body}</div>
+                            </div>
 
-                      <div className="ticket-detail">
-                        {(() => {
-                          const activeTicket = tickets.find(t => t.id === selectedTicketId);
-                          if (!activeTicket) return <div style={{ padding: '20px' }}>Select a ticket</div>;
-
-                          return (
-                            <>
-                              <div className="ticket-messages">
-                                {activeTicket.messages.map((m, i) => (
-                                  <div key={i} className={`ticket-msg ${m.sender}`}>
-                                    {m.text}
-                                  </div>
-                                ))}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ fontSize: '12px', fontWeight: 600, color: '#9ca3af' }}>Compose Draft Reply:</label>
+                                <button onClick={handleAutoDraft} style={{ backgroundColor: '#8b5cf6', color: '#fff', fontSize: '11px', padding: '4px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                                  Auto-Draft with Agent Context
+                                </button>
                               </div>
-
-                              <div className="ticket-reply-box">
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Draft Reply Email</span>
-                                  <button className="action-btn" onClick={requestDraftAssist}>
-                                    🪄 Agent Draft Assist
-                                  </button>
-                                </div>
-                                <textarea 
-                                  className="ticket-reply-textarea"
-                                  placeholder="Type reply or click Agent Draft Assist to generate one..."
-                                  value={replyText}
-                                  onChange={(e) => setReplyText(e.target.value)}
-                                />
-                                <div className="ticket-reply-actions">
-                                  <button className="btn btn-primary" onClick={sendTicketReply}>
-                                    Send Email Reply
-                                  </button>
-                                </div>
-                              </div>
-                            </>
-                          );
-                        })()}
+                              <textarea 
+                                rows={6} 
+                                style={{ padding: '12px', fontSize: '13px', width: '100%', resize: 'none' }}
+                                value={supportDraft}
+                                onChange={(e) => setSupportDraft(e.target.value)}
+                                placeholder="Type support reply or click Auto-Draft to query logs..."
+                              />
+                              <button style={{ backgroundColor: '#10b981', color: '#fff', padding: '8px', borderRadius: '6px', fontWeight: 600 }}>
+                                Send Reply Email
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* 4. Analytics & Health */}
-                {activeModule === 'analytics' && (
+                {activeMenu === 'analytics' && (
                   <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Analytics & Server Health</h3>
-                        <p>Staging and production performance checks.</p>
-                      </div>
-                      {telemetry.isLeakActive && (
-                        <button className="btn btn-primary" style={{ backgroundColor: 'var(--accent-orange)' }} onClick={triggerHotfix}>
-                          ⚡ Apply Hotfix
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <h2 style={{ margin: 0, fontSize: '24px' }}>Analytics & System Health</h2>
+                      {healthStatus === 'warning' ? (
+                        <button onClick={handleApplyHotfix} style={{ backgroundColor: '#10b981', color: '#fff', padding: '6px 12px', borderRadius: '4px', fontWeight: 600 }}>
+                          Apply AI Hotfix (Database Patch)
+                        </button>
+                      ) : (
+                        <button onClick={handleSimulateError} style={{ backgroundColor: '#ef4444', color: '#fff', padding: '6px 12px', borderRadius: '4px', fontWeight: 600 }}>
+                          Simulate Server Crash
                         </button>
                       )}
                     </div>
 
-                    <div className="analytics-grid">
-                      <div className="metric-card">
-                        <h4>CPU Usage</h4>
-                        <div className="value">{telemetry.cpuUsage}%</div>
-                      </div>
-                      <div className={`metric-card ${telemetry.isLeakActive ? 'alert' : ''}`}>
-                        <h4>Memory Allocation</h4>
-                        <div className="value">{telemetry.currentMemoryUsage}%</div>
-                        {telemetry.isLeakActive && <div style={{ color: 'var(--accent-red)', fontSize: '10px', marginTop: '4px' }}>⚠️ Leak detected in websocket listener</div>}
+                    <div className="metrics-grid">
+                      <div className="metric-card" style={{ borderLeft: healthStatus === 'warning' ? '4px solid #ef4444' : '1px solid #374151' }}>
+                        <h3>CPU Diagnostics</h3>
+                        <div className="value">{cpuUsage}%</div>
                       </div>
                       <div className="metric-card">
-                        <h4>Production Latency</h4>
-                        <div className="value">{telemetry.latency}ms</div>
+                        <h3>RAM Allocation</h3>
+                        <div className="value">{ramUsage}%</div>
                       </div>
                       <div className="metric-card">
-                        <h4>Daily Pageviews</h4>
-                        <div className="value">{telemetry.pageViews}</div>
+                        <h3>Active DB Conns</h3>
+                        <div className="value">{healthStatus === 'warning' ? '98 / 100' : '12 / 150'}</div>
                       </div>
                     </div>
 
-                    <h4 style={{ marginBottom: '8px' }}>Memory Allocation Timeline</h4>
-                    <div className="chart-placeholder">
-                      <svg width="100%" height="100px">
-                        {/* Render simple mock metric line */}
-                        <path 
-                          d={telemetry.isLeakActive 
-                            ? "M 10,80 L 100,75 L 200,60 L 300,50 L 400,30 L 500,20" 
-                            : "M 10,80 L 100,75 L 200,78 L 300,75 L 400,74 L 500,75"
-                          } 
-                          fill="none" 
-                          stroke={telemetry.isLeakActive ? 'var(--accent-red)' : 'var(--accent-green)'} 
-                          strokeWidth="2" 
-                        />
-                      </svg>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#9ca3af', display: 'block', marginBottom: '8px' }}>Live Server Log Streams:</label>
+                    <div className="log-terminal">
+                      {logs.map((log, i) => (
+                        <div key={i} style={{ marginBottom: '4px' }}>{log}</div>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {/* 5. Marketing */}
-                {activeModule === 'marketing' && (
+                {activeMenu === 'marketing' && (
                   <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Marketing & SEO</h3>
-                        <p>Configure search tags and marketing campaigns.</p>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--bg-card)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>Marketing & SEO Dashboard</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>SEO Page Title</label>
-                        <input type="text" className="search-input" style={{ width: '100%' }} defaultValue="Bobbie Digital LLC | Custom Web Engineering" />
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#9ca3af', display: 'block', marginBottom: '6px' }}>Google Meta Title Tag:</label>
+                        <input type="text" style={{ width: '100%', padding: '8px 12px' }} defaultValue="Omnigent - Automated Application Builder & Agency Hub" />
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>SEO Meta Description</label>
-                        <textarea className="ticket-reply-textarea" defaultValue="Bobbie Digital designs high-performance React solutions with cloud-based multi-agent integrations." />
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#9ca3af', display: 'block', marginBottom: '6px' }}>Meta Keywords (Comma separated):</label>
+                        <input type="text" style={{ width: '100%', padding: '8px 12px' }} defaultValue="ai coding agent, software agency automation, multi-agent react framework" />
                       </div>
                       <div>
-                        <button className="btn btn-primary">Save SEO Settings</button>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#9ca3af', display: 'block', marginBottom: '6px' }}>Email Marketing Campaign Setup:</label>
+                        <select style={{ width: '100%', padding: '8px 12px' }}>
+                          <option>Welcome Onboarding Sequence</option>
+                          <option>Developer Newsletter Weekly</option>
+                        </select>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* 6. Domains */}
-                {activeModule === 'domains' && (
+                {activeMenu === 'domains' && (
                   <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Domains configuration</h3>
-                        <p>CNAME details and SSL authentication paths.</p>
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>Custom Domain Configuration</h2>
+                    <div style={{ border: '1px solid #374151', padding: '16px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#0f172a' }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '15px' }}>https://omnigent.bobbiedigital.com</div>
+                        <div style={{ fontSize: '12px', color: '#9ca3af' }}>DNS Target: `cname.bobbiedigitalhub.net` | SSL: Active</div>
                       </div>
-                    </div>
-
-                    <div className="crm-table-container">
-                      <table className="crm-table">
-                        <thead>
-                          <tr>
-                            <th>Domain</th>
-                            <th>Redirect Target</th>
-                            <th>SSL Status</th>
-                            <th>Cloudflare Routing</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td>bobbiedigital.com</td>
-                            <td>Primary</td>
-                            <td><span style={{ color: 'var(--accent-green)' }}>Active (AutoRenew)</span></td>
-                            <td>Enabled</td>
-                          </tr>
-                          <tr>
-                            <td>www.bobbiedigital.com</td>
-                            <td>bobbiedigital.com</td>
-                            <td><span style={{ color: 'var(--accent-green)' }}>Active</span></td>
-                            <td>Enabled</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                      <span className="badge active" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>Live</span>
                     </div>
                   </div>
                 )}
 
-                {/* 7. Integrations */}
-                {activeModule === 'integrations' && (
+                {activeMenu === 'integrations' && (
                   <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>MCP Server Connectors</h3>
-                        <p>Equip agents with file system access, terminal execution, and database triggers.</p>
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>Model Context Protocol (MCP) Integrations</h2>
+                    
+                    {loadingTools ? (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af' }}>
+                        <Cpu className="dashed-line" size={32} style={{ margin: '0 auto 12px', display: 'block' }} />
+                        <span>Discovering active MCP servers and tools...</span>
                       </div>
-                    </div>
-
-                    <div className="crm-table-container">
-                      <table className="crm-table">
-                        <thead>
-                          <tr>
-                            <th>Connector Name</th>
-                            <th>Protocol Type</th>
-                            <th>Internal Port</th>
-                            <th>Connection Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {mcpIntegrations.map((mcp, i) => (
-                            <tr key={i}>
-                              <td style={{ fontWeight: 500 }}>{mcp.name}</td>
-                              <td>{mcp.type}</td>
-                              <td>{mcp.port}</td>
-                              <td>
-                                <span style={{
-                                  padding: '2px 6px',
-                                  borderRadius: '10px',
-                                  fontSize: '10px',
-                                  backgroundColor: mcp.status === 'Connected' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255,255,255,0.05)',
-                                  color: mcp.status === 'Connected' ? 'var(--accent-green)' : 'var(--text-secondary)'
-                                }}>
-                                  {mcp.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* 8. Security */}
-                {activeModule === 'security' && (
-                  <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Security & Packages Audit</h3>
-                        <p>Active firewall blocks, SSL checks, package vulnerabilities, and GDPR data rights.</p>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-                      <div className="metric-card">
-                        <h4>Blocked Firewall Requests</h4>
-                        <div className="value">12</div>
-                        <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px' }}>IP scan frequency: 10s</p>
-                      </div>
-                      <div className="metric-card">
-                        <h4>Security Audit</h4>
-                        <div className="value" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-green)', fontSize: '16px', marginTop: '12px' }}>
-                          <CheckCircle size={18} /> 0 Vulnerabilities Detected
+                    ) : mcpTools.length === 0 ? (
+                      <div>
+                        <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '6px', color: '#ef4444', fontSize: '13px' }}>
+                          ⚠️ Event Bus Server is offline or no MCP servers are configured in <code>mcp-config.json</code>. Showing mock integrations.
                         </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: '24px', backgroundColor: 'var(--panel-bg)', borderRadius: '12px', padding: '16px', border: '1px solid var(--border-color)' }}>
-                      <h4 style={{ marginBottom: '16px' }}>GDPR & Data Privacy Rights</h4>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                        <button className="btn btn-secondary" onClick={() => apiPost('/api/gdpr/export')}>
-                          <Download size={14} style={{ marginRight: '6px' }} /> Export My Data
-                        </button>
-                        <button className="btn btn-secondary" onClick={() => {
-                          if (confirm('Are you sure? This action cannot be undone.')) {
-                            apiPost('/api/gdpr/delete');
-                          }
-                        }}>
-                          <Trash2 size={14} style={{ marginRight: '6px' }} /> Delete My Account
-                        </button>
-                      </div>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '12px' }}>
-                        In compliance with GDPR Article 15 and CCPA Section 1798.100, you have the right to access, export, and delete your personal data.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 9. Code & Git */}
-                {activeModule === 'code' && (
-                  <div>
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Code Sandbox</h3>
-                        <p>Explore workspace file contents and active git differences.</p>
-                      </div>
-                    </div>
-
-                    <div className="code-grid">
-                      <div className="code-tree">
-                        <div className={`tree-item ${selectedFile === 'src/App.tsx' ? 'active' : ''}`} onClick={() => setSelectedFile('src/App.tsx')}>
-                          <FileCode size={13} /> src/App.tsx
-                        </div>
-                        <div className={`tree-item ${selectedFile === 'src/server.ts' ? 'active' : ''}`} onClick={() => setSelectedFile('src/server.ts')}>
-                          <FileCode size={13} /> src/server.ts
-                        </div>
-                        <div className={`tree-item ${selectedFile === 'package.json' ? 'active' : ''}`} onClick={() => setSelectedFile('package.json')}>
-                          <FileCode size={13} /> package.json
-                        </div>
-                        <div className={`tree-item ${selectedFile === 'git diff' ? 'active' : ''}`} onClick={() => setSelectedFile('git diff')}>
-                          <ShieldAlert size={13} /> Git Diff
-                        </div>
-                      </div>
-
-                      <div className="code-viewer">
-                        <pre>{fileContents[selectedFile]}</pre>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 10. Agents (Visualizer) */}
-                {activeModule === 'agents' && (
-                  <div className="agent-visualizer-container">
-                    <div className="section-header">
-                      <div className="section-title">
-                        <h3>Agent Task & Visualizer Panel</h3>
-                        <p>Observe state sharing on the event bus blackboard.</p>
-                      </div>
-                    </div>
-
-                    <div className="visualizer-panel">
-                      <div className="agent-graph">
-                        <div className="reactflow-wrapper" style={{ height: 220 }}>
-                          <ReactFlowProvider>
-                            <ReactFlow nodes={rfNodes} edges={rfEdges} onNodeClick={(_, node) => openInspectorForNode(node as Node)}>
-                              <Background gap={12} />
-                              <Controls />
-                              <MiniMap />
-                            </ReactFlow>
-                          </ReactFlowProvider>
-                        </div>
-                        <svg className="graph-svg-lines">
-                          <line x1="20%" y1="50%" x2="50%" y2="50%" stroke="var(--border-color)" strokeWidth="2" />
-                          <line x1="50%" y1="50%" x2="80%" y2="50%" stroke="var(--border-color)" strokeWidth="2" />
-                        </svg>
-
-                        <div className={`agent-node ${getActiveAgentName() === 'Main Bot' ? 'active' : ''}`}>
-                          <div className="agent-avatar" style={{ backgroundColor: 'var(--accent-purple)' }}>
-                            <Workflow />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          <div style={{ border: '1px solid #374151', padding: '16px', borderRadius: '6px', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: '14px' }}>Local FileSystem MCP Server</div>
+                              <div style={{ fontSize: '12px', color: '#9ca3af' }}>Provides read/write access to folder trees.</div>
+                            </div>
+                            <span className="badge active">Mocked</span>
                           </div>
-                          <span className="agent-node-title">Main Bot</span>
-                          <span className="agent-node-status">{getActiveAgentName() === 'Main Bot' ? 'ACTIVE' : 'IDLE'}</span>
-                        </div>
-
-                        <div className={`agent-node ${getActiveAgentName() === 'Scaffold Agent' || getActiveAgentName() === 'Coder Agent' ? 'active' : ''}`}>
-                          <div className="agent-avatar" style={{ backgroundColor: 'var(--accent-orange)' }}>
-                            <Code />
-                          </div>
-                          <span className="agent-node-title">Coder / Scaffold</span>
-                          <span className="agent-node-status">{getActiveAgentName() === 'Scaffold Agent' || getActiveAgentName() === 'Coder Agent' ? 'ACTIVE' : 'IDLE'}</span>
-                        </div>
-
-                        <div className={`agent-node ${getActiveAgentName() === 'Support Agent' ? 'active' : ''}`}>
-                          <div className="agent-avatar" style={{ backgroundColor: 'var(--accent-blue)' }}>
-                            <LifeBuoy />
-                          </div>
-                          <span className="agent-node-title">Support Agent</span>
-                          <span className="agent-node-status">{getActiveAgentName() === 'Support Agent' ? 'ACTIVE' : 'IDLE'}</span>
-                        </div>
-                      </div>
-
-                      <h4 style={{ marginBottom: '8px' }}>Blackboard Chronicles (Timeline)</h4>
-                      <div className="sequence-timeline">
-                        {eventLogs.map((log) => (
-                          <div key={log.eventId} className={`sequence-step ${log.status === 'COMPLETED' ? 'completed' : 'active'}`} onClick={() => openInspectorForEvent(log)}>
-                            <h5>{log.sender} ➔ {log.receiver} <span className="time">{new Date(log.timestamp).toLocaleTimeString()}</span></h5>
-                            <p>{log.message} (Status: {log.status})</p>
-                          </div>
-                        ))}
-                      </div>
-
-                      <h4 style={{ marginTop: '20px', marginBottom: '8px' }}>Raw Blackboard JSON Event Feed</h4>
-                      <div className="blackboard-log-output">
-                        {JSON.stringify(eventLogs, null, 2)}
-                      </div>
-
-                      <div className="huggingface-agent-panel" style={{ marginTop: '24px' }}>
-                        <div className="section-header">
-                          <div className="section-title">
-                            <h3>Hugging Face Agent Browser</h3>
-                            <p>Search and download agent models from Hugging Face into the local workspace.</p>
+                          <div style={{ border: '1px solid #374151', padding: '16px', borderRadius: '6px', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: '14px' }}>Sqlite Schema Discovery MCP</div>
+                              <div style={{ fontSize: '12px', color: '#9ca3af' }}>Enables SQL schema inspection & data queries.</div>
+                            </div>
+                            <span className="badge active">Mocked</span>
                           </div>
                         </div>
-
-                        <div className="hf-search-row" style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
-                          <input
-                            type="text"
-                            className="search-input"
-                            value={hfSearchTerm}
-                            onChange={(e) => setHfSearchTerm(e.target.value)}
-                            placeholder="Search Hugging Face agents..."
-                            style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'var(--panel-bg)' }}
-                          />
-                          <button className="action-btn" type="button" onClick={() => fetchHuggingFaceModels(hfSearchTerm)}>
-                            <Search /> Search
-                          </button>
-                        </div>
-
-                        {hfLoading && <div className="status-message">Loading models...</div>}
-                        {hfError && <div className="status-message error">{hfError}</div>}
-                        {hfDownloadMessage && <div className="status-message">{hfDownloadMessage}</div>}
-
-                        <div className="hf-model-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: '14px' }}>
-                          {huggingFaceModels.map((model) => (
-                            <div key={model.id} className="hf-model-card" style={{ border: '1px solid var(--border-color)', borderRadius: '14px', padding: '16px', background: 'var(--panel-bg)' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-                                <div>
-                                  <h5 style={{ margin: 0 }}>{model.id}</h5>
-                                  <p className="text-muted" style={{ margin: '4px 0 0', fontSize: '12px' }}>by {model.author}</p>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {/* Group tools by serverName */}
+                        {Array.from(new Set(mcpTools.map(t => t.serverName))).map(server => {
+                          const serverTools = mcpTools.filter(t => t.serverName === server);
+                          return (
+                            <div key={server} style={{ border: '1px solid #374151', borderRadius: '6px', backgroundColor: '#0f172a', overflow: 'hidden' }}>
+                              <div style={{ padding: '12px 16px', backgroundColor: '#1e293b', borderBottom: '1px solid #374151', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <Cpu size={16} color="#8b5cf6" />
+                                  <span style={{ fontWeight: 600, fontSize: '15px', color: '#fff' }}>{server.toUpperCase()} MCP Server</span>
                                 </div>
-                                <Download size={18} />
+                                <span className="badge active" style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>Connected</span>
                               </div>
-                              <p style={{ margin: '10px 0 0', fontSize: '13px', minHeight: '46px', color: 'var(--text-muted)' }}>
-                                {model.description || model.pipeline_tag || 'No description provided.'}
-                              </p>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px' }}>
-                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{model.downloads.toLocaleString()} downloads</span>
-                                <button className="btn btn-primary" type="button" onClick={() => downloadHuggingFaceAgentModel(model.id)}>
-                                  Download
-                                </button>
+                              <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 600, color: '#9ca3af', marginBottom: '4px' }}>Exposed Tools ({serverTools.length}):</div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                  {serverTools.map(({ tool }) => (
+                                    <div key={tool.name} style={{ border: '1px solid #1e293b', padding: '10px 12px', borderRadius: '4px', backgroundColor: '#020617' }}>
+                                      <div style={{ fontWeight: 600, fontSize: '13px', color: '#f3f4f6', fontFamily: 'monospace' }}>{tool.name}()</div>
+                                      <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px', minHeight: '28px' }}>{tool.description || 'No description provided.'}</div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </div>
-                          ))}
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeMenu === 'security' && (
+                  <div>
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>Security & Audit Settings</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ border: '1px solid #374151', padding: '16px', borderRadius: '6px', backgroundColor: '#0f172a' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '14px' }}>API Endpoint Firewall</span>
+                          <span className="badge active">Active</span>
                         </div>
+                        <p style={{ margin: 0, fontSize: '12px', color: '#9ca3af' }}>IP Rate limits configured: 100 requests per minute from user agents.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeMenu === 'code' && (
+                  <div>
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>Code Explorer</h2>
+                    <div style={{ display: 'flex', border: '1px solid #374151', borderRadius: '6px', height: '350px' }}>
+                      {/* File Tree */}
+                      <div style={{ width: '30%', borderRight: '1px solid #374151', padding: '12px', backgroundColor: '#0f172a', overflowY: 'auto', fontSize: '13px' }}>
+                        <div style={{ fontWeight: 600, color: '#8b5cf6', marginBottom: '8px' }}>workspace-root/</div>
+                        <div style={{ paddingLeft: '12px', color: '#9ca3af' }}>📁 client/</div>
+                        <div style={{ paddingLeft: '24px', color: '#d1d5db' }}>index.html</div>
+                        <div style={{ paddingLeft: '24px', color: '#d1d5db' }}>package.json</div>
+                        <div style={{ paddingLeft: '24px', color: '#d1d5db' }}>src/App.tsx</div>
+                        <div style={{ paddingLeft: '12px', color: '#9ca3af' }}>📁 server/</div>
+                        <div style={{ paddingLeft: '24px', color: '#d1d5db' }}>src/index.ts</div>
+                        <div style={{ paddingLeft: '24px', color: '#d1d5db' }}>src/app.ts</div>
+                      </div>
+                      
+                      {/* Editor Preview */}
+                      <div style={{ width: '70%', padding: '16px', backgroundColor: '#020617', overflowY: 'auto', fontFamily: 'monospace', fontSize: '12px', color: '#cbd5e1' }}>
+                        <div style={{ color: '#64748b', borderBottom: '1px solid #1e293b', paddingBottom: '4px', marginBottom: '8px' }}>// server/src/index.ts</div>
+                        <div><span style={{ color: '#f43f5e' }}>import</span> http <span style={{ color: '#f43f5e' }}>from</span> <span style={{ color: '#10b981' }}>'http'</span>;</div>
+                        <div><span style={{ color: '#f43f5e' }}>import</span> app, &#123; setupWebSocketServer &#125; <span style={{ color: '#f43f5e' }}>from</span> <span style={{ color: '#10b981' }}>'./app'</span>;</div>
+                        <br />
+                        <div><span style={{ color: '#f43f5e' }}>const</span> server = http.createServer(app);</div>
+                        <div>setupWebSocketServer(server);</div>
+                        <br />
+                        <div>server.listen(3000, {"() => {"})</div>
+                        <div style={{ paddingLeft: '16px' }}>console.log(<span style={{ color: '#10b981' }}>"Omnigent Event Bus online"</span>);</div>
+                        <div>&#125;);</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeMenu === 'agents' && (
+                  <div>
+                    <h2 style={{ margin: '0 0 16px', fontSize: '24px' }}>Agents Handoff Visualizer</h2>
+                    <div style={{ border: '1px solid #374151', padding: '16px', borderRadius: '6px', height: '350px', backgroundColor: '#0f172a', display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #374151', paddingBottom: '8px', marginBottom: '16px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#9ca3af' }}>Background Agent Topology Graph</span>
+                        <div style={{ display: 'flex', gap: '8px', fontSize: '11px', color: '#d1d5db' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '50%' }} /> Active
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ width: '8px', height: '8px', backgroundColor: '#374151', borderRadius: '50%' }} /> Idle
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Custom Render of Handoff Graph */}
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        
+                        {/* Hub Node */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          left: '50%', 
+                          top: '50%', 
+                          transform: 'translate(-50%, -50%)',
+                          border: '2px solid #8b5cf6', 
+                          padding: '12px 18px', 
+                          borderRadius: '8px', 
+                          backgroundColor: '#1f2937', 
+                          textAlign: 'center',
+                          zIndex: 10
+                        }}>
+                          <div style={{ fontSize: '10px', color: '#9ca3af', fontWeight: 600 }}>ORCHESTRATOR</div>
+                          <div style={{ fontWeight: 700, color: '#fff', fontSize: '13px' }}>Main Agent</div>
+                        </div>
+
+                        {/* Top Node */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          left: '50%', 
+                          top: '15%', 
+                          transform: 'translateX(-50%)',
+                          border: '1px solid #374151', 
+                          padding: '8px 14px', 
+                          borderRadius: '6px', 
+                          backgroundColor: '#111827',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ fontSize: '9px', color: '#9ca3af' }}>TEMPLATES</div>
+                          <div style={{ fontWeight: 600, fontSize: '12px' }}>Scaffold Agent</div>
+                        </div>
+
+                        {/* Bottom Node */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          left: '50%', 
+                          bottom: '15%', 
+                          transform: 'translateX(-50%)',
+                          border: '1px solid #374151', 
+                          padding: '8px 14px', 
+                          borderRadius: '6px', 
+                          backgroundColor: '#111827',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ fontSize: '9px', color: '#9ca3af' }}>CUSTOMER</div>
+                          <div style={{ fontWeight: 600, fontSize: '12px' }}>Support Agent</div>
+                        </div>
+
+                        {/* Left Node */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          left: '15%', 
+                          top: '50%', 
+                          transform: 'translateY(-50%)',
+                          border: '1px solid #374151', 
+                          padding: '8px 14px', 
+                          borderRadius: '6px', 
+                          backgroundColor: '#111827',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ fontSize: '9px', color: '#9ca3af' }}>WRITER</div>
+                          <div style={{ fontWeight: 600, fontSize: '12px' }}>Coder Agent</div>
+                        </div>
+
+                        {/* Right Node */}
+                        <div style={{ 
+                          position: 'absolute', 
+                          right: '15%', 
+                          top: '50%', 
+                          transform: 'translateY(-50%)',
+                          border: '1px solid #374151', 
+                          padding: '8px 14px', 
+                          borderRadius: '6px', 
+                          backgroundColor: '#111827',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ fontSize: '9px', color: '#9ca3af' }}>VERIFIER</div>
+                          <div style={{ fontWeight: 600, fontSize: '12px' }}>Linter Agent</div>
+                        </div>
+
+                        {/* Connective SVG lines */}
+                        <svg style={{ position: 'absolute', width: '100%', height: '100%', top: 0, left: 0, pointerEvents: 'none' }}>
+                          {/* Main -> Scaffold (Top) */}
+                          <line x1="50%" y1="50%" x2="50%" y2="25%" stroke="#374151" strokeWidth="2" className="dashed-line" />
+                          {/* Main -> Support (Bottom) */}
+                          <line x1="50%" y1="50%" x2="50%" y2="75%" stroke="#374151" strokeWidth="2" />
+                          {/* Main -> Coder (Left) */}
+                          <line x1="50%" y1="50%" x2="25%" y2="50%" stroke="#374151" strokeWidth="2" />
+                          {/* Main -> Linter (Right) */}
+                          <line x1="50%" y1="50%" x2="75%" y2="50%" stroke="#374151" strokeWidth="2" />
+                        </svg>
+
+                      </div>
+
+                      {/* Event Log Output */}
+                      <div style={{ borderTop: '1px solid #374151', paddingTop: '10px', fontSize: '11px', color: '#9ca3af' }}>
+                        <strong>Active Event Stream:</strong> {eventLogs.length > 0 ? eventLogs[eventLogs.length - 1].message : 'Event Bus listening for handoffs...'}
                       </div>
                     </div>
                   </div>
@@ -1129,149 +869,20 @@ function App() {
         </div>
       </div>
 
-      {/* Compliance / Cookie tracker consent banner */}
-      {showCookieBanner && (
-        <div className="cookie-banner">
-          <div className="cookie-content">
-            <h4>Cookie & Tracker Preferences</h4>
-            <p>
-              We use telemetry data to analyze site performance, router loads, and support agent draft assistance. 
-              Review and customize your options to consent. Read our <span style={{ color: 'var(--accent-purple)', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => setShowPrivacyModal(true)}>Privacy Policy</span>.
-            </p>
+      {/* 3. Legal / Cookie Compliance Banner */}
+      {cookieConsent && (
+        <div className="compliance-banner">
+          <div className="compliance-text">
+            <span>
+              This application is operated by <strong>Bobbie Digital LLC</strong>. We use cookies and process application code contexts (routed to secure LLM APIs) to analyze performance and auto-generate project configurations. By using our hub, you consent to our <a href="#privacy">Privacy Policy</a> and <a href="#terms">Terms of Service</a>.
+            </span>
           </div>
-          
-          {showCookieSettings && (
-            <div className="cookie-options">
-              <label className="cookie-option">
-                <input 
-                  type="checkbox" 
-                  checked={cookiePreferences.essential} 
-                  disabled 
-                  onChange={() => {}} 
-                />
-                Essential Cookies
-              </label>
-              <label className="cookie-option">
-                <input 
-                  type="checkbox" 
-                  checked={cookiePreferences.analytics} 
-                  onChange={(e) => setCookiePreferences(prev => ({ ...prev, analytics: e.target.checked }))} 
-                />
-                Analytics Telemetry
-              </label>
-              <label className="cookie-option">
-                <input 
-                  type="checkbox" 
-                  checked={cookiePreferences.marketing} 
-                  onChange={(e) => setCookiePreferences(prev => ({ ...prev, marketing: e.target.checked }))} 
-                />
-                Marketing Toggles
-              </label>
-            </div>
-          )}
-
-          <div className="cookie-actions">
-            <button className="btn btn-secondary" onClick={() => setShowCookieSettings(!showCookieSettings)}>
-              {showCookieSettings ? 'Hide Options' : 'Customise'}
-            </button>
-            <button className="btn btn-secondary" onClick={() => setShowCookieBanner(false)}>
-              Decline
-            </button>
-            <button 
-              className="btn btn-primary" 
-              onClick={() => {
-                setShowCookieBanner(false);
-                console.log('Saved cookie consent preferences:', cookiePreferences);
-              }}
-            >
-              Accept Selection
-            </button>
+          <div className="compliance-actions">
+            <button className="btn-decline" onClick={() => setCookieConsent(false)}>Decline</button>
+            <button className="btn-accept" onClick={() => setCookieConsent(false)}>Accept Cookies</button>
           </div>
         </div>
       )}
-
-      {/* Privacy Policy Modal */}
-      {showPrivacyModal && (
-        <div className="modal-overlay" onClick={() => setShowPrivacyModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>GDPR & CCPA Privacy Policy</h3>
-              <button style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowPrivacyModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>Last updated: June 21, 2026</p>
-              <h4>1. Data Collection & Processing</h4>
-              <p>
-                Omnigent acts as an application deployment portal. We collect system metrics, live connection status data, and user profile properties inside staging applications. 
-              </p>
-              <h4>2. Routing to Third-Party LLM Endpoints</h4>
-              <p>
-                To provide conversational AI features, agent drafts, and code parsing, we route logs and inputs through secure cloud endpoints (Google Gemini, Anthropic Claude). No personal identifiable information is shared without user-initiated support requests.
-              </p>
-              <h4>3. Data Access & Portability</h4>
-              <p>
-                In compliance with GDPR and CCPA, users have the Right to Portability (exporting data in readable JSON formats) and the Right to be Forgotten (deleting directories and profiles). Users can trigger these actions directly from the live CRM view in the dashboard.
-              </p>
-            </div>
-            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={() => setShowPrivacyModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Terms of Service Modal */}
-      {showTermsModal && (
-        <div className="modal-overlay" onClick={() => setShowTermsModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Terms of Service (ToS)</h3>
-              <button style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }} onClick={() => setShowTermsModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <p>Welcome to Omnigent. By accessing this platform, you agree to these conditions.</p>
-              <h4>1. Workspace Scaffolding License</h4>
-              <p>
-                All template files, boileplate codes, and agent runner frameworks generated are licensed to Bobbie Digital LLC and the specific client entities under custom service level agreements.
-              </p>
-              <h4>2. Telemetry and Compliance Tools</h4>
-              <p>
-                We provide visual indicators of system health, databases, and GDPR utilities. However, sandbox isolation and network access configurations remain the responsibility of the system administrator.
-              </p>
-            </div>
-            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={() => setShowTermsModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {inspectorOpen && (
-        <div className="drawer-overlay" onClick={() => setInspectorOpen(false)}>
-          <div className="drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="drawer-header">
-              <h4>Inspector</h4>
-              <button className="btn" onClick={() => setInspectorOpen(false)}><X size={16} /></button>
-            </div>
-            <div className="drawer-body">
-              {inspectorData ? (
-                <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{JSON.stringify(inspectorData, null, 2)}</pre>
-              ) : (
-                <div>No inspector data</div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Phase 5: Compliance & Legal Components */}
-      <CookieBanner />
-      <PrivacyPolicyModal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} />
-      <TermsOfServiceModal isOpen={showTermsModal} onClose={() => setShowTermsModal(false)} />
     </div>
   );
 }

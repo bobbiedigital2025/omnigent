@@ -1,93 +1,102 @@
-# Omnigent
+# CineAgent Studio OS 🎬
+**Autonomous Multi-Agent Cinema Production & Observability Studio**
 
-Omnigent is a cloud-first, agent-augmented workspace and application lifecycle manager designed for **Bobbie Digital LLC**. It enables a single developer to design, build, test, deploy, monitor, and support multiple client applications from a single unified interface.
-
----
-
-## 🚀 Key Features
-
-*   **Single-Chat Interface:** Communicate with a single "Main Agent" who coordinates multiple specialized background agents using Model Context Protocol (MCP) and Agent-to-Agent (A2A) event-driven communication.
-*   **Dual-View Workspace (Side-by-Side):**
-    *   **App Preview:** A hot-reloading browser preview of your active application.
-    *   **Developer Dashboard:** A unified admin panel containing views for:
-        *   **App Overview:** Live health metrics and task lists.
-        *   **Users (Live CRM):** Customer profiles, accounts, and signups.
-        *   **Support Ticket CRM:** Integrated email inbox (`support@yourdomain.com`) with agent-assisted reply drafting.
-        *   **Code & Agents:** Code file trees, diff viewers, the agent handoff visualization panel (Graph View vs. Sequence Timeline), and **Hugging Face model browser**.
-*   **Flexible Model Selection:** Browse and download specialized agent models directly from Hugging Face Hub. Choose from thousands of open-source models (code generation, domain-specific reasoning, support automation) tailored to your workflow.
-*   **LLM Routing & Fallback:** Intelligently route user prompts to OpenAI/Gemini APIs with automatic local fallback if cloud APIs are unavailable or rate-limited.
-*   **Hybrid Model Architecture:** Minimize API token costs by routing routine tasks to free local models (via Ollama) and routing complex orchestration/logic to high-reasoning cloud models (via Gemini/Claude).
+*Submitted to the Google Cloud Agentic Cinema Hackathon (Grafana Track)*
 
 ---
 
-## 🛠️ Technology Stack
+## 🚀 Overview
 
-*   **Frontend:** React, Vite, TypeScript, Tailwind CSS, Monaco Editor (for code previews), React Flow (for handoff graphs).
-*   **Backend Server:** Node.js (Express) running locally on localhost.
-*   **Agent Orchestration:** Standardized JSON event bus (Blackboard pattern).
-*   **Model Discovery & Selection:** Hugging Face Hub API integration with model browser UI and one-click download.
-*   **LLM Routing:** OpenAI API with intelligent routing, local fallback responses, and task-type inference.
-*   **Local Models:** Ollama (Qwen 2.5 Coder, Llama 3) and downloaded Hugging Face models.
-*   **Cloud Models:** OpenAI (GPT-4 / GPT-3.5-Turbo), Gemini 2.5 Flash (via future LiteLLM integration).
-*   **Integrations:** Model Context Protocol (MCP) servers (Filesystem, Terminal, Database).
+**CineAgent Studio OS** is an autonomous, agent-augmented studio control room designed for independent filmmakers, screenwriters, VFX supervisors, and post-production managers.
+
+It solves both key bottlenecks in modern film production:
+1. **Pre-Production Bottleneck:** Automated screenplay scene breakdown, shot listing, and budget estimation.
+2. **Studio Compute Bottleneck:** Real-time GPU render farm observability, LLM token cost tracking, and incident alert resolution.
 
 ---
 
-## 📂 Directory Structure
+## 🛠️ Technology Stack & Runtime Evidence
+
+- **AI Models & SDKs (Google Cloud AI):** Built on `@google/genai` using **Gemini 2.5 Pro** (screenplay analysis) and **Gemini 2.5 Flash** (fast tool execution & telemetry parsing). *(Satisfies Hackathon Rules 56 & 68)*.
+- **Grafana Cloud MCP Server (`@grafana/mcp-grafana`):** Integrates Grafana Cloud MCP Server via JSON-RPC for querying Prometheus metrics, Loki logs, and active studio alerts at runtime. *(Satisfies Hackathon Rule 73)*.
+- **Sandboxed Agent Execution:** MicroVM isolated worker agents running inside **E2B Cloud Sandboxes**.
+- **Event Bus & Architecture:** Asynchronous JSON Event Bus (Blackboard Pattern) running over WebSockets (`ws://localhost:3000`).
+- **Frontend & UI:** React 19 + Vite + TypeScript split-pane dashboard with real-time sequence timelines and telemetry charts.
+
+---
+
+## 📂 Project Structure
 
 ```text
-bobbie-digital-hub/
-├── README.md                 # Project Overview & Setup
-├── PDR.md                    # Project Design Requirements Document
-├── blueprint.md              # System Architecture & Development Phases
-├── server/                   # Backend Local Server (Orchestrator & Event Bus)
+omnigent/
+├── LICENSE                         # MIT Open Source License
+├── README.md                       # Project Documentation
+├── server/                         # Express Backend & Event Bus
 │   ├── src/
-│   │   ├── agents/           # Specialized Agent Prompts & Core Logic
-│   │   ├── mcp/              # MCP Server Connectors
-│   │   ├── bus/              # Central Blackboard/Event Bus
-│   │   └── index.ts          # Express Server Entrypoint
+│   │   ├── llm/
+│   │   │   └── geminiClient.ts     # Google GenAI SDK (@google/genai) integration
+│   │   ├── mcp/
+│   │   │   └── grafanaConnector.ts # Grafana Cloud MCP Server Connector
+│   │   ├── sandboxes/
+│   │   │   └── sandboxManager.ts   # E2B Cloud MicroVM Sandbox Manager
+│   │   ├── telemetry/
+│   │   │   └── studioMetricsEmitter.ts # Real-time cinema telemetry emitter
+│   │   ├── agents/
+│   │   │   ├── sandboxedScriptAgent.ts     # Gemini 2.5 Pro screenplay breakdown
+│   │   │   ├── sandboxedStudioOpsAgent.ts  # Gemini 2.5 Flash Grafana ops agent
+│   │   │   ├── sandboxedCoderAgent.ts      # Sandboxed code execution
+│   │   │   └── sandboxedSecurityAgent.ts   # Sandboxed security auditor
+│   │   └── app.ts                  # Express REST routes & WebSocket server
 │   └── package.json
-└── client/                   # Frontend UI (React + Vite)
+└── client/                         # React Frontend Studio UI
     ├── src/
-    │   ├── components/       # Chat, Graph, Dashboard Modules
-    │   ├── hooks/            # WebSocket connectors
-    │   └── App.tsx
+    │   ├── App.tsx                 # Studio Dashboard & Chat Interface
+    │   └── App.css
     └── package.json
 ```
 
 ---
 
-## 🏁 Getting Started
+## 🏁 Quick Start & Running Locally
 
-1.  `cd server`
-2.  `npm install`
-3.  `cd ../client`
-4.  `npm install`
-5.  `cd ../server`
-6.  `npm run dev`
-7.  `cd ../client`
-8.  `npm run dev`
+### 1. Environment Configuration
+Create `server/.env`:
+```env
+GEMINI_API_KEY=your_gemini_api_key
+E2B_API_KEY=your_e2b_api_key
+GRAFANA_API_KEY=your_grafana_api_key
+EVENT_BUS_URL=ws://localhost:3000
+```
 
-> The current setup uses a local Express backend on port `3000` and a Vite frontend on port `5173`.
+### 2. Start the Backend Server & Event Bus
+```bash
+cd server
+npm install
+npm run dev
+```
 
-## ✅ Current Status
+### 3. Launch Sandboxed Cinema Agents
+In separate terminal windows:
+```bash
+cd server
 
-*   **Phase 1:** Local Server & Event Bus ✅ Complete
-*   **Phase 2:** React Core Dashboard (10 modules) ✅ Complete  
-*   **Phase 3:** Agent Handoff Visualizer ✅ Complete
-*   **Phase 4:** LLM Routing & Hugging Face Integration ✅ Complete
-*   **Phase 5:** CRM, Support Mail & GDPR Compliance ✅ Complete
-*   **Security:** Hardened backend with helmet, CORS, rate-limiting, payload limits
-*   **SEO:** Full optimization with meta tags, structured data, robots.txt, sitemap.xml
+# Launch Sandboxed Screenplay Agent
+npm run agent:script:sandboxed
 
-### 🚀 MVP Status: PRODUCTION READY
-Omnigent is fully implemented with all core features: agent orchestration, LLM routing, Hugging Face model discovery, CRM integration, email support automation, and GDPR compliance tools.
+# Launch Sandboxed Studio Ops Agent
+npm run agent:ops:sandboxed
+```
 
-For development and testing, you can enable a safe, auditable dev endpoint that grants or revokes the `Admin` role to a user in the mock CRM. This is intentionally gated behind an environment flag and should NEVER be enabled in production.
+### 4. Start the Frontend Workspace
+```bash
+cd client
+npm install
+npm run dev
+```
+Open `http://localhost:5173` in your browser.
 
-- Enable by setting the environment variable: `ALLOW_DEV_ADMIN_FREE_ACCESS=true` (or run in `NODE_ENV=development`).
-- Endpoints (POST JSON { "email": "user@example.com" }):
-    - `/api/admin/grant-dev` — Grants `Admin` role to the user with the given email.
-    - `/api/admin/revoke-dev` — Reverts the user's role to `User`.
+---
 
-The server will emit a blackboard event when these endpoints are called so actions are visible in the audit/event stream.
+## 📜 License
+
+Licensed under the [MIT License](LICENSE).
